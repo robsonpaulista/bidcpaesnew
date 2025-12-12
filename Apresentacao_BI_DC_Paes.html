@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BI DC Pães - Manual de Indicadores</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --border: #e5e7eb;
+      --bg-light: #f9fafb;
+      --accent: #ed751c;
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      line-height: 1.5;
+      color: var(--text-primary);
+      background: #f3f4f6;
+      font-size: 12px;
+    }
+    
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: white; font-size: 10px; }
+      .container { max-width: none; padding: 0; margin: 0; }
+      .page { padding: 0; margin: 0; box-shadow: none; border: none; break-after: page; }
+      .page:last-child { break-after: auto; }
+      .no-print { display: none !important; }
+      .screenshot { max-height: 160px; }
+    }
+    
+    .container { max-width: 210mm; margin: 0 auto; padding: 20px; }
+    .page { background: white; padding: 32px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--border); }
+    
+    .cover-line { width: 48px; height: 3px; background: var(--accent); margin-bottom: 20px; }
+    .cover-title { font-size: 32px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+    .cover-subtitle { font-size: 14px; color: var(--text-secondary); margin-bottom: 24px; }
+    
+    .toc-list { list-style: none; }
+    .toc-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .toc-item:last-child { border-bottom: none; }
+    .toc-number { width: 20px; height: 20px; background: var(--bg-light); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-right: 10px; }
+    .toc-content h4 { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+    .toc-content p { font-size: 10px; color: var(--text-muted); }
+    
+    .page-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .page-number { font-size: 9px; font-weight: 500; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 3px; }
+    .page-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px; }
+    .page-description { font-size: 11px; color: var(--text-secondary); }
+    
+    .screenshot-container { margin: 10px 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .screenshot { width: 100%; max-height: 180px; object-fit: cover; object-position: top; display: block; }
+    .screenshot-caption { padding: 5px 8px; background: var(--bg-light); border-top: 1px solid var(--border); font-size: 9px; color: var(--text-muted); text-align: center; }
+    
+    .section { margin-top: 12px; }
+    .section-title { font-size: 9px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    
+    .indicator-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .indicator-table th, .indicator-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    .indicator-table th { font-size: 8px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; background: var(--bg-light); }
+    .indicator-name { font-weight: 500; color: var(--text-primary); }
+    .indicator-desc { font-size: 9px; color: var(--text-muted); }
+    
+    .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .card { background: var(--bg-light); border-radius: 4px; padding: 8px; }
+    .card h5 { font-size: 10px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+    .card p { font-size: 9px; color: var(--text-secondary); line-height: 1.4; }
+    .card-formula { margin-top: 4px; padding: 3px 5px; background: white; border: 1px solid var(--border); border-radius: 2px; font-family: monospace; font-size: 8px; color: var(--text-secondary); }
+    
+    .footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: 9px; }
+    
+    .feature-list { list-style: none; }
+    .feature-item { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .feature-item:last-child { border-bottom: none; }
+    .feature-bullet { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+    .feature-content { font-size: 10px; color: var(--text-secondary); }
+    .feature-content strong { color: var(--text-primary); }
+    
+    .print-btn { position: fixed; bottom: 24px; right: 24px; background: var(--text-primary); color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <!-- CAPA -->
+    <div class="page">
+      <div class="cover-line"></div>
+      <h1 class="cover-title">BI DC Pães</h1>
+      <p class="cover-subtitle">Manual Completo de Indicadores e Funcionalidades</p>
+      
+      <ul class="toc-list">
+        <li class="toc-item">
+          <div class="toc-number">1</div>
+          <div class="toc-content"><h4>Visão Geral</h4><p>Dashboard consolidado • KPIs principais • Gráficos de performance</p></div>
+        </li>
+        <li class="toc-item">
+          <div class="toc-number">2</div>
+          <div class="toc-content"><h4>Comercial</h4><p>Faturamento • Vendedores • Clientes • Mix de produtos</p></div>
+        </li>
+        <li class="toc-item">
+          <div class="toc-number">3</div>
+          <div class="toc-content"><h4>Compras</h4><p>Matéria-prima • Fornecedores • Preços • Economia</p></div>
+        </li>
+        <li class="toc-item">
+          <div class="toc-number">4</div>
+          <div class="toc-content"><h4>Estoque</h4><p>Giro • Acurácia • Vencimentos • Avarias</p></div>
+        </li>
+        <li class="toc-item">
+          <div class="toc-number">5</div>
+          <div class="toc-content"><h4>Financeiro</h4><p>DRE • Fluxo de caixa • Ciclo financeiro • Recebíveis</p></div>
+        </li>
+        <li class="toc-item">
+          <div class="toc-number">6</div>
+          <div class="toc-content"><h4>Logística</h4><p>OTIF • Rotas • Veículos • Custos de entrega</p></div>
+        </li>
+        <li class="toc-item">
+          <div class="toc-number">7</div>
+          <div class="toc-content"><h4>Produção</h4><p>OEE • Turnos • Linhas • Perdas • Qualidade</p></div>
+        </li>
+      </ul>
+      
+      <div class="footer">DC Pães — Business Intelligence • Dezembro 2024</div>
+    </div>
+    
+    <!-- VISÃO GERAL - Parte 1 -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Visão Geral</div>
+        <h2 class="page-title">Dashboard Principal</h2>
+        <p class="page-description">Consolidação dos principais indicadores de todas as áreas em uma única tela.</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <img src="screenshots/home.png" alt="Home" class="screenshot">
+        <div class="screenshot-caption">Tela inicial com visão 360° da operação</div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Cards de KPIs (8 indicadores)</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Indicador</th><th>O que mede</th><th>Comparativo</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">Receita Mensal</span></td><td>Faturamento bruto do mês</td><td>vs meta e mês anterior</td></tr>
+            <tr><td><span class="indicator-name">Volume Produzido</span></td><td>Quantidade total em kg</td><td>vs capacidade</td></tr>
+            <tr><td><span class="indicator-name">Margem Bruta</span></td><td>% de lucro bruto</td><td>vs meta</td></tr>
+            <tr><td><span class="indicator-name">Perdas Totais</span></td><td>Valor de perdas (R$)</td><td>vs mês anterior</td></tr>
+            <tr><td><span class="indicator-name">Entregas</span></td><td>Nº de entregas realizadas</td><td>vs planejado</td></tr>
+            <tr><td><span class="indicator-name">Ticket Médio</span></td><td>Valor médio por pedido</td><td>vs meta</td></tr>
+            <tr><td><span class="indicator-name">Meta Atingida</span></td><td>% de atingimento geral</td><td>vs 100%</td></tr>
+            <tr><td><span class="indicator-name">Clientes Ativos</span></td><td>Base que comprou em 30d</td><td>vs mês anterior</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Gráficos da Página</h3>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Receita Mensal (Área):</strong> Evolução do faturamento ao longo do ano, com linha de meta para comparação visual. Permite identificar sazonalidade e tendências.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Perdas por Área (Pizza):</strong> Distribuição percentual das perdas entre Produção, Estoque, Logística e outros setores. Identifica onde focar esforços de redução.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Volume por Categoria (Barras):</strong> Produção em kg separada por categoria (Pães, Bolos, Salgados, etc.). Mostra o mix de produção.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Performance Geral (Barras de progresso):</strong> OEE, OTIF, Acurácia e Fill Rate com meta. Visão rápida da saúde operacional.</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- COMERCIAL - Parte 1 -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Comercial</div>
+        <h2 class="page-title">Vendas e Performance</h2>
+        <p class="page-description">Análise completa de faturamento, vendedores, clientes e mix de produtos.</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <img src="screenshots/comercial.png" alt="Comercial" class="screenshot">
+        <div class="screenshot-caption">Painel comercial com análises de vendas e clientes</div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Cards de KPIs (8 indicadores)</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Indicador</th><th>Descrição</th><th>Fórmula/Cálculo</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">Faturamento</span></td><td>Receita bruta do período</td><td>Soma de todas as vendas</td></tr>
+            <tr><td><span class="indicator-name">Ticket Médio</span></td><td>Valor médio por pedido</td><td>Faturamento ÷ Nº Pedidos</td></tr>
+            <tr><td><span class="indicator-name">Atingimento Meta</span></td><td>% da meta alcançada</td><td>Realizado ÷ Meta × 100</td></tr>
+            <tr><td><span class="indicator-name">Crescimento</span></td><td>Variação vs ano anterior</td><td>(Atual - Anterior) ÷ Anterior</td></tr>
+            <tr><td><span class="indicator-name">Clientes Ativos</span></td><td>Compraram em 30 dias</td><td>Contagem distinta</td></tr>
+            <tr><td><span class="indicator-name">Churn</span></td><td>% clientes perdidos</td><td>Inativos ÷ Base Total</td></tr>
+            <tr><td><span class="indicator-name">Novos Clientes</span></td><td>Primeira compra no mês</td><td>Contagem de novos</td></tr>
+            <tr><td><span class="indicator-name">Positivação</span></td><td>% da base que comprou</td><td>Ativos ÷ Cadastrados</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <!-- COMERCIAL - Parte 2 -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Comercial (continuação)</div>
+        <h2 class="page-title">Gráficos e Tabelas</h2>
+        <p class="page-description">Detalhamento de todos os elementos visuais da página Comercial.</p>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Gráficos</h3>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Faturamento Mensal (Área):</strong> Evolução do faturamento mês a mês com preenchimento gradiente. Visualiza tendência anual e sazonalidade do negócio.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Vendas por Região (Barras horizontais):</strong> Faturamento e número de clientes por região geográfica. Duas séries de barras para comparar volume financeiro vs quantidade de clientes.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Mix de Produtos (Barras + Linha):</strong> Participação atual vs ideal de cada categoria com linha de margem. Identifica desvios do mix planejado e rentabilidade por categoria.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Funil de Clientes (Barras de progresso):</strong> Base Total → Ativos (30d) → Compraram na semana → Ticket acima da média. Visualiza conversão da base.</div>
+          </li>
+        </ul>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Tabelas</h3>
+        <div class="card-grid">
+          <div class="card">
+            <h5>Ranking de Vendedores</h5>
+            <p>Top performers do mês com: Nome, Faturamento, Meta, % Atingimento. Badge colorido indica status (verde ≥100%, amarelo ≥95%, vermelho &lt;95%).</p>
+          </div>
+          <div class="card">
+            <h5>Clientes por Faixa</h5>
+            <p>Segmentação ABC por faturamento: Faixa, Quantidade de clientes, % da base, Faturamento total. Análise de concentração de receita.</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Destaque: Meta Mensal</h3>
+        <p style="font-size: 10px; color: var(--text-secondary);">Painel em destaque mostrando: Meta de faturamento, % atingido (barra de progresso), valor faltante para bater meta e dias restantes no mês. Ajuda no acompanhamento diário.</p>
+      </div>
+    </div>
+    
+    <!-- COMPRAS -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Compras</div>
+        <h2 class="page-title">Matéria-Prima e Fornecedores</h2>
+        <p class="page-description">Gestão de insumos, análise de preços e performance de fornecedores.</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <img src="screenshots/compras.png" alt="Compras" class="screenshot">
+        <div class="screenshot-caption">Painel de compras com evolução de preços e fornecedores</div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Cards de KPIs (6 indicadores)</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Indicador</th><th>Descrição</th><th>Meta/Referência</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">Volume de Compras</span></td><td>Valor total comprado no mês</td><td>vs orçamento</td></tr>
+            <tr><td><span class="indicator-name">Lead Time Médio</span></td><td>Dias entre pedido e entrega</td><td>Menor = melhor</td></tr>
+            <tr><td><span class="indicator-name">Fill Rate</span></td><td>% do pedido atendido completo</td><td>≥ 98%</td></tr>
+            <tr><td><span class="indicator-name">Pedidos em Aberto</span></td><td>Aguardando entrega</td><td>Monitorar atrasos</td></tr>
+            <tr><td><span class="indicator-name">Fornecedores Ativos</span></td><td>Com transações em 90 dias</td><td>Diversificação</td></tr>
+            <tr><td><span class="indicator-name">Fornecedores Críticos</span></td><td>OTD ou qualidade abaixo do mínimo</td><td>Zero = ideal</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Gráficos e Tabelas</h3>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Evolução de Preços (Linhas):</strong> Histórico de preços de Farinha, Margarina e Fermento (R$/kg). Três linhas coloridas, permite identificar tendências de alta/baixa.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Performance Fornecedores (Barras):</strong> Comparativo de OTD, Fill Rate e Qualidade por fornecedor. Três barras por fornecedor para análise comparativa.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Tabela Custo MP:</strong> Lista de matérias-primas com preço atual, unidade e variação (%). Badge verde (queda) ou vermelho (alta).</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Tabela Fornecedores:</strong> Nome, OTD, Fill Rate, Qualidade e barra de Dependência (% das compras). Alerta se dependência > 30%.</div>
+          </li>
+        </ul>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Destaque: Economia Gerada</h3>
+        <p style="font-size: 10px; color: var(--text-secondary);">Painel verde mostrando economia mensal obtida: Total de savings, dividido entre Negociação (renegociações de preço) e Consolidação (otimização de pedidos).</p>
+      </div>
+    </div>
+    
+    <!-- ESTOQUE -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Estoque</div>
+        <h2 class="page-title">Inventário e Controle</h2>
+        <p class="page-description">Giro, cobertura, acurácia, vencimentos e avarias do estoque.</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <img src="screenshots/estoque.png" alt="Estoque" class="screenshot">
+        <div class="screenshot-caption">Painel de estoque com acurácia e gestão de inventário</div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Cards de KPIs (6 indicadores)</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Indicador</th><th>Descrição</th><th>Fórmula</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">Valor em Estoque</span></td><td>Total do inventário (R$)</td><td>Σ (Qtd × Custo Médio)</td></tr>
+            <tr><td><span class="indicator-name">Giro de Estoque</span></td><td>Vezes que renova/período</td><td>CMV ÷ Estoque Médio</td></tr>
+            <tr><td><span class="indicator-name">Acurácia</span></td><td>Físico = Sistema (%)</td><td>Itens OK ÷ Total × 100</td></tr>
+            <tr><td><span class="indicator-name">Dias de Cobertura</span></td><td>Quanto tempo dura o estoque</td><td>Estoque ÷ Consumo Diário</td></tr>
+            <tr><td><span class="indicator-name">Itens Críticos</span></td><td>Abaixo do mínimo ou vencendo</td><td>Contagem</td></tr>
+            <tr><td><span class="indicator-name">Perdas/Avarias</span></td><td>Valor perdido (R$)</td><td>Soma de baixas</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Gráficos e Tabelas</h3>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Painel Acurácia:</strong> Barra de progresso com % de acurácia, cards de Itens Contados, Conformes e Divergentes. Meta de 99% em destaque.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Giro por Categoria (Barras + Linha):</strong> Dias de giro (barras) e valor em estoque (linha) por categoria. Eixo duplo para duas métricas.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Avarias por Tipo (Pizza):</strong> Distribuição: Vencimento, Danos físicos, Furto, Obsolescência. Cores indicam gravidade.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Tabela Vencimentos:</strong> Prazo, Quantidade, Valor e Criticidade (badge Alta/Média/Baixa). Alerta de produtos vencendo em 3 dias.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Saúde do Inventário:</strong> Cards: SKUs Ativos, Sem Movimento (30d), Abaixo Mín., Acima Máx. Visão de ações necessárias.</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- FINANCEIRO -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Financeiro</div>
+        <h2 class="page-title">Resultados e Fluxo de Caixa</h2>
+        <p class="page-description">DRE, fluxo de caixa, ciclo financeiro e análise de recebíveis.</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <img src="screenshots/financeiro.png" alt="Financeiro" class="screenshot">
+        <div class="screenshot-caption">Painel financeiro com DRE e fluxo de caixa</div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Cards de KPIs (8 indicadores)</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Indicador</th><th>Descrição</th><th>Fórmula</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">Receita Líquida</span></td><td>Faturamento - deduções</td><td>Rec. Bruta - Impostos - Devoluções</td></tr>
+            <tr><td><span class="indicator-name">Margem Bruta</span></td><td>% após custos diretos</td><td>(Rec. Líq. - CMV) ÷ Rec. Líq.</td></tr>
+            <tr><td><span class="indicator-name">EBITDA</span></td><td>Lucro operacional</td><td>Rec - Custos - Despesas Op.</td></tr>
+            <tr><td><span class="indicator-name">Lucro Líquido</span></td><td>Resultado final</td><td>Após juros e impostos</td></tr>
+            <tr><td><span class="indicator-name">Contas a Receber</span></td><td>Vendas não recebidas</td><td>Soma de títulos em aberto</td></tr>
+            <tr><td><span class="indicator-name">Inadimplência</span></td><td>% vencido > 30 dias</td><td>Vencidos ÷ Total a Receber</td></tr>
+            <tr><td><span class="indicator-name">Contas a Pagar</span></td><td>Compromissos futuros</td><td>Soma de obrigações</td></tr>
+            <tr><td><span class="indicator-name">Saldo Caixa</span></td><td>Disponível imediato</td><td>Bancos + Caixa físico</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Gráficos e Tabelas</h3>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Fluxo de Caixa (Barras + Linha):</strong> Entradas (verde), Saídas (vermelho) como barras. Linha azul mostra saldo acumulado.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Despesas por Centro (Barras):</strong> Produção, Vendas, Administrativo, Logística, etc. com valor e % do total.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>DRE Resumido (Tabela):</strong> Receita Bruta → Deduções → Líquida → CMV → Lucro Bruto → Despesas → EBITDA → Resultado. Com % (AV).</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Aging Recebíveis (Tabela):</strong> A vencer, Vencido 1-30d, 31-60d, >60d. Clientes, valor e % do total. Badge de criticidade.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Ciclo Financeiro:</strong> PME (12d) + PMR (28d) - PMP (35d) = 5 dias. Visualização com fórmula explicativa.</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- LOGÍSTICA -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Logística</div>
+        <h2 class="page-title">Entregas e Distribuição</h2>
+        <p class="page-description">OTIF, rotas, veículos, custos e análise de devoluções.</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <img src="screenshots/logistica.png" alt="Logística" class="screenshot">
+        <div class="screenshot-caption">Painel logístico com OTIF e custos por rota</div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Cards de KPIs (8 indicadores)</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Indicador</th><th>Descrição</th><th>Meta</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">OTIF</span></td><td>On Time In Full combinado</td><td>≥ 95%</td></tr>
+            <tr><td><span class="indicator-name">On Time</span></td><td>% entregas no prazo</td><td>≥ 97%</td></tr>
+            <tr><td><span class="indicator-name">In Full</span></td><td>% pedidos completos</td><td>≥ 98%</td></tr>
+            <tr><td><span class="indicator-name">Entregas</span></td><td>Nº realizadas no período</td><td>vs planejado</td></tr>
+            <tr><td><span class="indicator-name">Km Rodados</span></td><td>Quilometragem total</td><td>Otimizar rotas</td></tr>
+            <tr><td><span class="indicator-name">Devoluções</span></td><td>% pedidos devolvidos</td><td>< 2%</td></tr>
+            <tr><td><span class="indicator-name">R$/Entrega</span></td><td>Custo médio por entrega</td><td>Menor = melhor</td></tr>
+            <tr><td><span class="indicator-name">% s/ Faturamento</span></td><td>Custo logístico / Receita</td><td>< 10%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Gráficos e Tabelas</h3>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Painel OTIF:</strong> Cards On Time e In Full separados, com OTIF combinado em destaque. Barra de progresso vs meta 95%.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Evolução OTIF (Área + Linhas):</strong> OTIF como área preenchida, On Time e In Full como linhas. Histórico mensal.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Motivos Devolução (Pizza):</strong> Avaria, Atraso, Erro de pedido, Cliente ausente, Outros. Identifica principais causas.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Tabela Custo/Rota:</strong> Rota, Entregas, Km, Custo Total, R$/Entrega. Badge verde/amarelo/vermelho por eficiência.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Tabela Veículos:</strong> Veículo, Entregas, % Ocupação (barra), Km rodados, Custo. Análise de utilização da frota.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Composição Custo:</strong> Combustível (42%), Mão de obra (28%), Manutenção (18%), Avarias (5%), Outros (7%).</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- PRODUÇÃO -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Produção</div>
+        <h2 class="page-title">Eficiência e Qualidade</h2>
+        <p class="page-description">OEE completo, produtividade por turno, rendimento por linha e análise de perdas.</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <img src="screenshots/producao.png" alt="Produção" class="screenshot">
+        <div class="screenshot-caption">Painel de produção com OEE e rendimento</div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Cards de KPIs (8 indicadores)</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Indicador</th><th>Descrição</th><th>Meta</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">Volume Produzido</span></td><td>Quantidade total (kg)</td><td>vs capacidade</td></tr>
+            <tr><td><span class="indicator-name">OEE</span></td><td>Eficiência global equipamentos</td><td>≥ 85%</td></tr>
+            <tr><td><span class="indicator-name">Rendimento</span></td><td>Produto bom / MP entrada</td><td>≥ 95%</td></tr>
+            <tr><td><span class="indicator-name">Tempo de Ciclo</span></td><td>Tempo médio por lote</td><td>Padrão</td></tr>
+            <tr><td><span class="indicator-name">Taxa Qualidade</span></td><td>% produtos conformes</td><td>≥ 98%</td></tr>
+            <tr><td><span class="indicator-name">Perdas</span></td><td>% refugo/retrabalho</td><td>< 3%</td></tr>
+            <tr><td><span class="indicator-name">MTBF</span></td><td>Tempo médio entre falhas</td><td>Maior = melhor</td></tr>
+            <tr><td><span class="indicator-name">MTTR</span></td><td>Tempo médio de reparo</td><td>Menor = melhor</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Painel OEE Detalhado</h3>
+        <div class="card-grid card-grid-3">
+          <div class="card">
+            <h5>Disponibilidade</h5>
+            <p>Tempo operando ÷ Tempo planejado. Perdas: paradas, setup, quebras.</p>
+          </div>
+          <div class="card">
+            <h5>Performance</h5>
+            <p>Produção real ÷ Produção teórica. Perdas: lentidão, micro-paradas.</p>
+          </div>
+          <div class="card">
+            <h5>Qualidade</h5>
+            <p>Produtos bons ÷ Total produzido. Perdas: refugo, retrabalho.</p>
+          </div>
+        </div>
+        <p style="font-size: 9px; color: var(--text-muted); margin-top: 6px;">OEE = Disponibilidade × Performance × Qualidade. Classe mundial: ≥85%</p>
+      </div>
+    </div>
+    
+    <!-- PRODUÇÃO - Parte 2 -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Produção (continuação)</div>
+        <h2 class="page-title">Gráficos e Análises</h2>
+        <p class="page-description">Detalhamento de todos os elementos visuais da página de Produção.</p>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Gráficos</h3>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Evolução OEE (Área + Linhas):</strong> OEE como área preenchida laranja. Disponibilidade (azul), Performance (roxo) e Qualidade (verde) como linhas. Histórico de 6 meses.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Perdas de Produção (Pizza):</strong> Queima (vermelho), Peso incorreto (laranja), Forma irregular (amarelo), Embalagem (verde claro), Outros (verde). Kg por tipo.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Produtividade por Turno (Barras):</strong> Manhã, Tarde, Noite, Madrugada. Barras de Realizado vs Meta. Identifica turno mais produtivo.</div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-bullet"></div>
+            <div class="feature-content"><strong>Rendimento por Linha (Barras de progresso):</strong> Linha 1 a 4 com % de rendimento, badge de status e meta individual. Barra colorida (verde ≥ meta, amarelo abaixo).</div>
+          </li>
+        </ul>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Indicadores de Manutenção</h3>
+        <div class="card-grid">
+          <div class="card">
+            <h5>MTBF - Mean Time Between Failures</h5>
+            <p>Tempo médio entre falhas de equipamento. Quanto maior, melhor a confiabilidade. Ex: 48h significa que a cada 48h ocorre uma falha em média.</p>
+          </div>
+          <div class="card">
+            <h5>MTTR - Mean Time To Repair</h5>
+            <p>Tempo médio para reparar uma falha. Quanto menor, melhor a manutenção. Ex: 2.5h significa que leva 2.5h em média para consertar.</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Parâmetros de Qualidade</h3>
+        <div class="card-grid card-grid-3">
+          <div class="card">
+            <h5>Temperatura Forno</h5>
+            <p>Faixa: 180-220°C. Conformidade monitorada em tempo real.</p>
+          </div>
+          <div class="card">
+            <h5>pH da Massa</h5>
+            <p>Faixa: 5.2-5.8. Controle de qualidade do processo.</p>
+          </div>
+          <div class="card">
+            <h5>Umidade</h5>
+            <p>Faixa: 38-42%. Garante textura e durabilidade.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- RESUMO FINAL -->
+    <div class="page">
+      <div class="page-header">
+        <div class="page-number">Resumo Executivo</div>
+        <h2 class="page-title">Metas e Benefícios</h2>
+        <p class="page-description">Consolidação de KPIs principais e valor entregue pelo sistema.</p>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Metas por Área</h3>
+        <table class="indicator-table">
+          <thead><tr><th>Área</th><th>KPI Principal</th><th>Meta</th><th>Frequência</th></tr></thead>
+          <tbody>
+            <tr><td><span class="indicator-name">Comercial</span></td><td>Atingimento de Meta</td><td>≥ 100%</td><td>Diário</td></tr>
+            <tr><td><span class="indicator-name">Compras</span></td><td>Fill Rate Fornecedores</td><td>≥ 98%</td><td>Semanal</td></tr>
+            <tr><td><span class="indicator-name">Estoque</span></td><td>Acurácia de Inventário</td><td>≥ 99%</td><td>Mensal</td></tr>
+            <tr><td><span class="indicator-name">Financeiro</span></td><td>Margem EBITDA</td><td>≥ 15%</td><td>Mensal</td></tr>
+            <tr><td><span class="indicator-name">Logística</span></td><td>OTIF</td><td>≥ 95%</td><td>Diário</td></tr>
+            <tr><td><span class="indicator-name">Produção</span></td><td>OEE</td><td>≥ 85%</td><td>Por turno</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Benefícios do Sistema</h3>
+        <div class="card-grid">
+          <div class="card">
+            <h5>Visibilidade em Tempo Real</h5>
+            <p>Dashboards atualizados automaticamente. Acesso de qualquer dispositivo. Alertas de desvios.</p>
+          </div>
+          <div class="card">
+            <h5>Decisões Baseadas em Dados</h5>
+            <p>Elimina achismos. Histórico para análise. Comparativos automáticos com metas e períodos anteriores.</p>
+          </div>
+          <div class="card">
+            <h5>Identificação de Problemas</h5>
+            <p>Detecta desvios antes do impacto. Drill-down para análise de causa raiz. Priorização de ações.</p>
+          </div>
+          <div class="card">
+            <h5>Melhoria Contínua</h5>
+            <p>Histórico de indicadores. Análise de tendências. Acompanhamento de planos de ação.</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h3 class="section-title">Próximos Passos</h3>
+        <ul class="feature-list">
+          <li class="feature-item"><div class="feature-bullet"></div><div class="feature-content">Definir responsáveis por cada indicador e frequência de análise</div></li>
+          <li class="feature-item"><div class="feature-bullet"></div><div class="feature-content">Estabelecer reuniões de análise (diária operacional, semanal tática, mensal estratégica)</div></li>
+          <li class="feature-item"><div class="feature-bullet"></div><div class="feature-content">Criar planos de ação para indicadores abaixo da meta</div></li>
+          <li class="feature-item"><div class="feature-bullet"></div><div class="feature-content">Revisar metas trimestralmente com base no histórico</div></li>
+        </ul>
+      </div>
+      
+      <div class="footer">DC Pães — Business Intelligence • Dezembro 2024 • Versão 1.0</div>
+    </div>
+    
+  </div>
+  
+  <button class="print-btn no-print" onclick="window.print()">Salvar PDF</button>
+  
+</body>
+</html>
