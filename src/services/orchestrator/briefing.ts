@@ -81,30 +81,6 @@ export interface Briefing {
     action: string
     area: string
   }>
-  // Mantém compatibilidade com estrutura antiga
-  topAlerts?: Array<{
-    id: string
-    severity: string
-    title: string
-    area: string
-  }>
-  topCases?: Array<{
-    id: string
-    title: string
-    status: string
-    area: string
-  }>
-  kpiHighlights?: Array<{
-    kpi: string
-    value: number | string
-    trend: 'up' | 'down' | 'stable'
-    area: string
-  }>
-  recommendations?: Array<{
-    priority: 'high' | 'medium' | 'low'
-    action: string
-    area: string
-  }>
 }
 
 // ==========================================
@@ -268,14 +244,14 @@ export async function generateBriefing(date: string): Promise<Briefing> {
           label: mainKPI.label,
           value: mainKPI.value,
           unit: mainKPI.unit || '',
-          trend: mainKPI.trend || 'stable'
+          trend: (mainKPI.trend === 'neutral' ? 'stable' : mainKPI.trend) || 'stable' as 'up' | 'down' | 'stable'
         },
         kpis: kpis.slice(0, 4).map(k => ({
           id: k.id,
           label: k.label,
           value: k.value,
           unit: k.unit || '',
-          trend: k.trend || 'stable'
+          trend: (k.trend === 'neutral' ? 'stable' : k.trend) || 'stable' as 'up' | 'down' | 'stable'
         })),
         agentAnalysis,
         alerts: areaAlerts.slice(0, 3).map(a => ({
