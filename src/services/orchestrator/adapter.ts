@@ -585,6 +585,29 @@ export async function get_raw_material_seasonality(period: string): Promise<RawM
   }
 }
 
+export async function get_customers_by_billing_range(period: string): Promise<{
+  period: string
+  ranges: Array<{
+    range: string
+    customers: number
+    percentage: number
+    revenue: number
+  }>
+}> {
+  await new Promise(resolve => setTimeout(resolve, 300))
+  
+  const { clientesFaixaFaturamento } = await import('../mockData.js')
+  
+  const ranges = clientesFaixaFaturamento.map(c => ({
+    range: c.name,
+    customers: typeof c.quantidade === 'number' ? c.quantidade : 0,
+    percentage: typeof c.percent === 'number' ? c.percent : 0,
+    revenue: typeof c.valor === 'number' ? c.valor : 0
+  }))
+  
+  return { period, ranges }
+}
+
 export const DataAdapter = {
   get_kpis_overview,
   get_margin_by_product,
@@ -598,6 +621,7 @@ export const DataAdapter = {
   get_revenue_monthly,
   get_route_cost,
   get_vehicle_performance,
-  get_raw_material_seasonality
+  get_raw_material_seasonality,
+  get_customers_by_billing_range
 }
 
