@@ -1,18 +1,63 @@
 // ==========================================
 // GERAÇÃO DE BRIEFING DO DIA
 // ==========================================
-// Resumo executivo do trabalho dos agentes
+// Resumo executivo do trabalho dos agentes - Formato CEO/Executivo
 
 import type { IntelligentAlert, OperationalCase } from './types'
 import { supabaseFetch } from '../supabase/client'
+import { DataAdapter } from './adapter'
+import { receitaMensal } from '../mockData'
+
+// Áreas do negócio
+const AREAS = [
+  { id: 'comercial', label: 'Comercial' },
+  { id: 'compras', label: 'Compras' },
+  { id: 'producao', label: 'Produção' },
+  { id: 'estoque', label: 'Estoque' },
+  { id: 'logistica', label: 'Logística' },
+  { id: 'financeiro', label: 'Financeiro' }
+]
+
+// Mapeamento de meses para formato usado em receitaMensal
+const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
 // ==========================================
 // TIPOS
 // ==========================================
 
+export interface AreaSummary {
+  area: string
+  areaLabel: string
+  status: 'ok' | 'attention' | 'critical'
+  monthAccumulated: number
+  monthGoal: number | null
+  goalProgress: number | null // porcentagem 0-100+
+  mainKPI: {
+    label: string
+    value: number | string
+    unit: string
+    trend: 'up' | 'down' | 'stable'
+  }
+  kpis: Array<{
+    id: string
+    label: string
+    value: number | string
+    unit: string
+    trend: 'up' | 'down' | 'stable'
+  }>
+  agentAnalysis: string | null
+  alerts: Array<{
+    id: string
+    severity: string
+    title: string
+  }>
+  casesCount: number
+}
+
 export interface Briefing {
   date: string // YYYY-MM-DD
   summary: string
+  areaSummaries: AreaSummary[]
   topAlerts: Array<{
     id: string
     severity: string
@@ -36,6 +81,30 @@ export interface Briefing {
     action: string
     area: string
   }>
+  // Mantém compatibilidade com estrutura antiga
+  topAlerts?: Array<{
+    id: string
+    severity: string
+    title: string
+    area: string
+  }>
+  topCases?: Array<{
+    id: string
+    title: string
+    status: string
+    area: string
+  }>
+  kpiHighlights?: Array<{
+    kpi: string
+    value: number | string
+    trend: 'up' | 'down' | 'stable'
+    area: string
+  }>
+  recommendations?: Array<{
+    priority: 'high' | 'medium' | 'low'
+    action: string
+    area: string
+  }>
 }
 
 // ==========================================
@@ -46,6 +115,11 @@ export async function generateBriefing(date: string): Promise<Briefing> {
   const startOfDay = `${date}T00:00:00Z`
   const endOfDay = `${date}T23:59:59Z`
   
+  // Extrai mês atual da data (formato YYYY-MM-DD)
+  const dateObj = new Date(date + 'T00:00:00')
+  const monthIndex = dateObj.getMonth()
+  const currentMonthName = MONTH_NAMES[monthIndex]
+  
   // 1. Busca alertas do dia
   const { data: alertsData, error: alertsError } = await supabaseFetch('alerts', {
     method: 'GET',
@@ -53,9 +127,9 @@ export async function generateBriefing(date: string): Promise<Briefing> {
       'timestamp.gte': startOfDay,
       'timestamp.lte': endOfDay,
       order: 'timestamp.desc',
-      limit: '10'
+      limit: '50'
     },
-    useServiceRole: false // Usa anon key em dev
+    useServiceRole: false
   })
 
   if (alertsError) {
@@ -70,9 +144,9 @@ export async function generateBriefing(date: string): Promise<Briefing> {
     query: {
       status: 'in.(aberto,em_investigacao)',
       order: 'created_at.desc',
-      limit: '5'
+      limit: '20'
     },
-    useServiceRole: false // Usa anon key em dev
+    useServiceRole: false
   })
 
   if (casesError) {
@@ -90,7 +164,7 @@ export async function generateBriefing(date: string): Promise<Briefing> {
       order: 'timestamp.desc',
       limit: '20'
     },
-    useServiceRole: false // Usa anon key em dev
+    useServiceRole: false
   })
 
   if (eventsError) {
@@ -104,34 +178,115 @@ export async function generateBriefing(date: string): Promise<Briefing> {
   const casesArray = Array.isArray(cases) ? cases : []
   const eventsArray = Array.isArray(events) ? events : []
   
-  // Se não houver dados, gera um briefing básico
-  if (alertsArray.length === 0 && casesArray.length === 0 && eventsArray.length === 0) {
-    return {
-      date,
-      summary: 'Dia operacional estável. Nenhum desvio crítico detectado. Todos os indicadores estão dentro dos parâmetros esperados.',
-      topAlerts: [],
-      topCases: [],
-      kpiHighlights: [
-        {
-          kpi: 'Receita',
-          value: 'R$ 2.847,5k',
-          trend: 'up',
-          area: 'financeiro'
+  // 4. Gera resumos por área
+  const areaSummaries: AreaSummary[] = []
+  const revenueData = await DataAdapter.get_revenue_monthly('dezembro')
+  const currentMonthRevenue = revenueData.months.find(m => m.month === currentMonthName)
+  
+  for (const area of AREAS) {
+    try {
+      // Busca KPIs da área
+      const kpisData = await DataAdapter.get_kpis_overview('dezembro', area.id)
+      const kpis = kpisData.kpis || []
+      
+      if (kpis.length === 0) continue
+      
+      // Filtra alertas e casos da área
+      const areaAlerts = alertsArray.filter(a => {
+        const alertArea = a.indicator_area || a.area || 'geral'
+        return alertArea === area.id
+      })
+      const areaCases = casesArray.filter(c => {
+        const caseArea = c.area || 'geral'
+        return caseArea === area.id
+      })
+      
+      // Define KPI principal (primeiro da lista)
+      const mainKPI = kpis[0]
+      
+      // Calcula acumulado do mês e meta
+      let monthAccumulated = 0
+      let monthGoal: number | null = null
+      let goalProgress: number | null = null
+      
+      if (area.id === 'comercial' || area.id === 'financeiro') {
+        if (currentMonthRevenue) {
+          monthAccumulated = currentMonthRevenue.value
+          monthGoal = currentMonthRevenue.meta || null
+          if (monthGoal && monthGoal > 0) {
+            goalProgress = (monthAccumulated / monthGoal) * 100
+          }
+        }
+      } else {
+        // Para outras áreas, usa o KPI principal como acumulado
+        monthAccumulated = typeof mainKPI.value === 'number' ? mainKPI.value : 0
+      }
+      
+      // Determina status da área
+      const criticalAlerts = areaAlerts.filter(a => a.severity === 'P0').length
+      const highAlerts = areaAlerts.filter(a => a.severity === 'P1').length
+      let status: 'ok' | 'attention' | 'critical' = 'ok'
+      if (criticalAlerts > 0) {
+        status = 'critical'
+      } else if (highAlerts > 0 || areaCases.length > 2 || (goalProgress !== null && goalProgress < 95)) {
+        status = 'attention'
+      }
+      
+      // Gera análise do agente
+      let agentAnalysis: string | null = null
+      if (kpis.length > 0) {
+        const positiveTrends = kpis.filter(k => k.trend === 'up').length
+        const negativeTrends = kpis.filter(k => k.trend === 'down').length
+        
+        if (criticalAlerts > 0) {
+          agentAnalysis = `${criticalAlerts} alerta(s) crítico(s) detectado(s) requerendo atenção imediata.`
+        } else if (negativeTrends > positiveTrends) {
+          agentAnalysis = `Tendência de declínio observada em ${negativeTrends} indicador(es). Recomenda-se revisão operacional.`
+        } else if (positiveTrends > negativeTrends) {
+          agentAnalysis = `Tendência positiva em ${positiveTrends} indicador(es). Performance acima do esperado.`
+        } else if (goalProgress !== null) {
+          if (goalProgress >= 100) {
+            agentAnalysis = `Meta do mês superada (${goalProgress.toFixed(1)}%). Performance excelente.`
+          } else if (goalProgress >= 95) {
+            agentAnalysis = `Meta do mês em ${goalProgress.toFixed(1)}% de execução. No caminho para atingir o objetivo.`
+          } else {
+            agentAnalysis = `Meta do mês em ${goalProgress.toFixed(1)}% de execução. Requer atenção para atingir o objetivo.`
+          }
+        } else {
+          agentAnalysis = `Operação estável. Indicadores dentro dos parâmetros normais.`
+        }
+      }
+      
+      areaSummaries.push({
+        area: area.id,
+        areaLabel: area.label,
+        status,
+        monthAccumulated,
+        monthGoal,
+        goalProgress,
+        mainKPI: {
+          label: mainKPI.label,
+          value: mainKPI.value,
+          unit: mainKPI.unit || '',
+          trend: mainKPI.trend || 'stable'
         },
-        {
-          kpi: 'Margem Bruta',
-          value: '32,4%',
-          trend: 'up',
-          area: 'financeiro'
-        }
-      ],
-      recommendations: [
-        {
-          priority: 'low',
-          action: 'Manter monitoramento contínuo dos indicadores',
-          area: 'geral'
-        }
-      ]
+        kpis: kpis.slice(0, 4).map(k => ({
+          id: k.id,
+          label: k.label,
+          value: k.value,
+          unit: k.unit || '',
+          trend: k.trend || 'stable'
+        })),
+        agentAnalysis,
+        alerts: areaAlerts.slice(0, 3).map(a => ({
+          id: a.id || a.indicator_id || '',
+          severity: a.severity || 'P2',
+          title: `${a.indicator_label || a.indicator_id} - ${a.probable_cause || 'Desvio detectado'}`
+        })),
+        casesCount: areaCases.length
+      })
+    } catch (error) {
+      console.error(`⚠️ Erro ao gerar resumo para área ${area.id}:`, error)
     }
   }
 
@@ -161,12 +316,13 @@ export async function generateBriefing(date: string): Promise<Briefing> {
   // 8. Recomendações (baseadas nos alertas)
   const recommendations = extractRecommendations(alertsArray, casesArray)
 
-  // 9. Gera resumo executivo
-  const summary = generateExecutiveSummary(alertsArray, casesArray, eventsArray)
+  // 9. Gera resumo executivo melhorado
+  const summary = generateExecutiveSummaryEnhanced(areaSummaries, alertsArray, casesArray, eventsArray)
 
   return {
     date,
     summary,
+    areaSummaries,
     topAlerts,
     topCases,
     kpiHighlights,
@@ -177,6 +333,67 @@ export async function generateBriefing(date: string): Promise<Briefing> {
 // ==========================================
 // FUNÇÕES AUXILIARES
 // ==========================================
+
+function generateExecutiveSummaryEnhanced(
+  areaSummaries: AreaSummary[],
+  alerts: any[],
+  cases: any[],
+  events: any[]
+): string {
+  const criticalAlerts = alerts.filter(a => a.severity === 'P0').length
+  const highAlerts = alerts.filter(a => a.severity === 'P1').length
+  const openCases = cases.length
+  const totalEvents = events.length
+  
+  // Análise por área
+  const criticalAreas = areaSummaries.filter(a => a.status === 'critical')
+  const attentionAreas = areaSummaries.filter(a => a.status === 'attention')
+  
+  // Análise de metas
+  const areasWithGoals = areaSummaries.filter(a => a.goalProgress !== null)
+  const areasAboveGoal = areasWithGoals.filter(a => (a.goalProgress || 0) >= 100)
+  const areasBelowGoal = areasWithGoals.filter(a => (a.goalProgress || 0) < 95)
+  
+  const parts: string[] = []
+  
+  // Resumo operacional
+  if (criticalAlerts > 0) {
+    parts.push(`${criticalAlerts} alerta${criticalAlerts > 1 ? 's' : ''} crítico${criticalAlerts > 1 ? 's' : ''} (P0)`)
+  }
+  
+  if (highAlerts > 0) {
+    parts.push(`${highAlerts} alerta${highAlerts > 1 ? 's' : ''} de alta prioridade (P1)`)
+  }
+  
+  if (openCases > 0) {
+    parts.push(`${openCases} caso${openCases > 1 ? 's' : ''} em investigação`)
+  }
+  
+  // Resumo por área
+  if (criticalAreas.length > 0) {
+    const areasList = criticalAreas.map(a => a.areaLabel).join(', ')
+    parts.push(`${criticalAreas.length} área${criticalAreas.length > 1 ? 's' : ''} crítica${criticalAreas.length > 1 ? 's' : ''}: ${areasList}`)
+  }
+  
+  if (attentionAreas.length > 0 && criticalAreas.length === 0) {
+    parts.push(`${attentionAreas.length} área${attentionAreas.length > 1 ? 's' : ''} requerendo atenção`)
+  }
+  
+  // Resumo de metas
+  if (areasAboveGoal.length > 0) {
+    parts.push(`${areasAboveGoal.length} área${areasAboveGoal.length > 1 ? 's' : ''} com meta superada`)
+  }
+  
+  if (areasBelowGoal.length > 0) {
+    parts.push(`${areasBelowGoal.length} área${areasBelowGoal.length > 1 ? 's' : ''} abaixo da meta`)
+  }
+  
+  if (parts.length === 0) {
+    return 'Dia operacional estável. Todas as áreas operando dentro dos parâmetros esperados. Nenhum desvio crítico detectado.'
+  }
+
+  return `Resumo executivo: ${parts.join('; ')}. ${totalEvents > 0 ? `${totalEvents} evento${totalEvents > 1 ? 's' : ''} registrado${totalEvents > 1 ? 's' : ''} no dia.` : ''}`
+}
 
 function generateExecutiveSummary(
   alerts: any[],

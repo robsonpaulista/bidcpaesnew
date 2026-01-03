@@ -5,17 +5,48 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Calendar, AlertTriangle, FileText, TrendingUp, TrendingDown, Lightbulb, RefreshCw, Sparkles } from 'lucide-react'
+import { X, Calendar, AlertTriangle, FileText, TrendingUp, TrendingDown, Lightbulb, RefreshCw, Sparkles, Target, CheckCircle, AlertCircle } from 'lucide-react'
 import { getBriefing } from '../services/orchestrator/api'
+import { formatCurrency, formatNumber, formatPercent } from '../services/mockData'
 
 interface BriefingModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
+interface AreaSummary {
+  area: string
+  areaLabel: string
+  status: 'ok' | 'attention' | 'critical'
+  monthAccumulated: number
+  monthGoal: number | null
+  goalProgress: number | null
+  mainKPI: {
+    label: string
+    value: number | string
+    unit: string
+    trend: 'up' | 'down' | 'stable'
+  }
+  kpis: Array<{
+    id: string
+    label: string
+    value: number | string
+    unit: string
+    trend: 'up' | 'down' | 'stable'
+  }>
+  agentAnalysis: string | null
+  alerts: Array<{
+    id: string
+    severity: string
+    title: string
+  }>
+  casesCount: number
+}
+
 interface Briefing {
   date: string
   summary: string
+  areaSummaries?: AreaSummary[]
   topAlerts: Array<{ id: string; severity: string; title: string; area: string }>
   topCases: Array<{ id: string; title: string; status: string; area: string }>
   kpiHighlights: Array<{ kpi: string; value: number | string; trend: 'up' | 'down' | 'stable'; area: string }>
@@ -209,6 +240,128 @@ const BriefingModal = ({ isOpen, onClose }: BriefingModalProps) => {
                   </div>
                 </div>
               </div>
+
+              {/* Resumos por Área */}
+              {briefing.areaSummaries && briefing.areaSummaries.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-secondary-900 text-lg">Resumo por Área</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {briefing.areaSummaries.map((area, idx) => {
+                      const statusColors = {
+                        ok: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-900', icon: CheckCircle },
+                        attention: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-900', icon: AlertCircle },
+                        critical: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-900', icon: AlertTriangle }
+                      }
+                      const statusStyle = statusColors[area.status]
+                      const StatusIcon = statusStyle.icon
+                      const formatValue = (value: number | string, unit: string): string => {
+                        if (unit === 'R$') return formatCurrency(typeof value === 'number' ? value : 0)
+                        if (unit === '%') return formatPercent(typeof value === 'number' ? value : 0)
+                        return `${typeof value === 'number' ? formatNumber(value, 1) : value} ${unit}`
+                      }
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`${statusStyle.bg} ${statusStyle.border} border rounded-xl p-5 shadow-sm`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <StatusIcon className={`w-5 h-5 ${statusStyle.text}`} />
+                              <h4 className={`font-semibold ${statusStyle.text}`}>{area.areaLabel}</h4>
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              area.status === 'critical' ? 'bg-rose-200 text-rose-800' :
+                              area.status === 'attention' ? 'bg-amber-200 text-amber-800' :
+                              'bg-emerald-200 text-emerald-800'
+                            }`}>
+                              {area.status === 'critical' ? 'Crítico' : area.status === 'attention' ? 'Atenção' : 'OK'}
+                            </span>
+                          </div>
+
+                          {/* KPI Principal e Meta */}
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-secondary-700">{area.mainKPI.label}</span>
+                              <span className="text-lg font-bold text-secondary-900">
+                                {formatValue(area.mainKPI.value, area.mainKPI.unit)}
+                              </span>
+                            </div>
+                            {area.monthGoal !== null && area.goalProgress !== null && (
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between text-xs text-secondary-600 mb-1">
+                                  <span>Meta do Mês</span>
+                                  <span className="font-medium">{area.goalProgress.toFixed(1)}%</span>
+                                </div>
+                                <div className="w-full bg-slate-200 rounded-full h-2">
+                                  <div
+                                    className={`h-2 rounded-full ${
+                                      area.goalProgress >= 100 ? 'bg-emerald-500' :
+                                      area.goalProgress >= 95 ? 'bg-amber-500' :
+                                      'bg-rose-500'
+                                    }`}
+                                    style={{ width: `${Math.min(area.goalProgress, 100)}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-secondary-500 mt-1">
+                                  <span>{formatCurrency(area.monthAccumulated)}</span>
+                                  <span>{formatCurrency(area.monthGoal)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Análise do Agente */}
+                          {area.agentAnalysis && (
+                            <div className="mb-3 p-3 bg-white/60 rounded-lg border border-white/40">
+                              <p className="text-sm text-secondary-700 leading-relaxed">{area.agentAnalysis}</p>
+                            </div>
+                          )}
+
+                          {/* KPIs Adicionais */}
+                          {area.kpis.length > 0 && (
+                            <div className="grid grid-cols-2 gap-2 mt-3">
+                              {area.kpis.slice(0, 2).map((kpi, kpiIdx) => (
+                                <div key={kpiIdx} className="bg-white/60 rounded-lg p-2 border border-white/40">
+                                  <div className="text-xs text-secondary-600 mb-1">{kpi.label}</div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-semibold text-secondary-900">
+                                      {formatValue(kpi.value, kpi.unit)}
+                                    </span>
+                                    {kpi.trend === 'up' ? (
+                                      <TrendingUp className="w-3 h-3 text-emerald-600" />
+                                    ) : kpi.trend === 'down' ? (
+                                      <TrendingDown className="w-3 h-3 text-rose-600" />
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Alertas e Casos */}
+                          {(area.alerts.length > 0 || area.casesCount > 0) && (
+                            <div className="flex items-center gap-3 mt-3 text-xs text-secondary-600">
+                              {area.alerts.length > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  {area.alerts.length} alerta{area.alerts.length > 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {area.casesCount > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <FileText className="w-3 h-3" />
+                                  {area.casesCount} caso{area.casesCount > 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Métricas Rápidas */}
               <div className="grid grid-cols-3 gap-4">
