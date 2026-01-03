@@ -37,14 +37,21 @@ export default async function handler(
 
   try {
     // Valida variáveis de ambiente
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      console.error('❌ Supabase não configurado no Vercel')
+    const hasUrl = !!process.env.SUPABASE_URL
+    const hasAnonKey = !!process.env.SUPABASE_ANON_KEY
+    
+    if (!hasUrl || !hasAnonKey) {
+      console.error('❌ Supabase não configurado no Vercel', {
+        hasUrl,
+        hasAnonKey,
+        urlPreview: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 30) + '...' : 'FALTANDO'
+      })
       res.status(500).json({ 
         error: 'Supabase não configurado',
         message: 'Configure SUPABASE_URL e SUPABASE_ANON_KEY no Vercel Dashboard',
         details: {
-          hasUrl: !!process.env.SUPABASE_URL,
-          hasAnonKey: !!process.env.SUPABASE_ANON_KEY
+          hasUrl,
+          hasAnonKey
         }
       })
       return
@@ -60,6 +67,7 @@ export default async function handler(
     let error: any = null
     
     try {
+      console.log('📋 Buscando briefing para data:', date)
       const result = await supabaseFetch('briefings', {
         method: 'GET',
         query: {
@@ -72,9 +80,21 @@ export default async function handler(
       
       data = result.data
       error = result.error
+      
+      if (error) {
+        console.error('❌ Erro retornado por supabaseFetch:', {
+          error,
+          errorType: typeof error,
+          errorString: String(error)
+        })
+      }
     } catch (fetchError) {
       console.error('❌ Erro ao chamar supabaseFetch:', fetchError)
-      error = fetchError instanceof Error ? fetchError.message : 'Erro desconhecido'
+      error = fetchError instanceof Error ? {
+        message: fetchError.message,
+        stack: fetchError.stack,
+        name: fetchError.name
+      } : { message: String(fetchError) }
     }
 
     if (error) {

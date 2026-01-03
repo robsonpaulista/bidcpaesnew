@@ -63,11 +63,18 @@ const BriefingModal = ({ isOpen, onClose }: BriefingModalProps) => {
           setTimeout(() => loadBriefing(), 2000)
           return
         }
+        
+        // Se for 401 (Unauthorized), não tenta novamente - vai para fallback local
+        if (response.status === 401) {
+          console.warn('⚠️ API requer autenticação, executando rotinas localmente...')
+        } else {
+          console.warn(`⚠️ API retornou status ${response.status}, executando rotinas localmente...`)
+        }
       } catch (apiError) {
         console.warn('⚠️ API não disponível, executando rotinas localmente...')
       }
 
-      // Executa rotinas localmente
+      // Executa rotinas localmente (fallback)
       const { runRoutinesLocal } = await import('../services/orchestrator/routines')
       await runRoutinesLocal()
       

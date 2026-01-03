@@ -23,9 +23,15 @@ interface SupabaseClient {
 
 // Configuração
 // No frontend (Vite), usa import.meta.env
-// No backend (Node), usa process.env
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' && process.env ? process.env.SUPABASE_URL : undefined)
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' && process.env ? process.env.SUPABASE_ANON_KEY : undefined)
+// No backend (Node/serverless), usa process.env
+// Prioriza process.env em ambiente Node (serverless functions)
+const isNodeEnv = typeof process !== 'undefined' && process.env && typeof window === 'undefined'
+const SUPABASE_URL = isNodeEnv 
+  ? (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)
+  : (import.meta.env?.VITE_SUPABASE_URL || (typeof process !== 'undefined' && process.env ? process.env.SUPABASE_URL : undefined))
+const SUPABASE_ANON_KEY = isNodeEnv
+  ? (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)
+  : (import.meta.env?.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' && process.env ? process.env.SUPABASE_ANON_KEY : undefined))
 const SUPABASE_SERVICE_ROLE_KEY = typeof process !== 'undefined' && process.env ? process.env.SUPABASE_SERVICE_ROLE_KEY : undefined
 
 // Log de debug (apenas em desenvolvimento ou se não configurado)
