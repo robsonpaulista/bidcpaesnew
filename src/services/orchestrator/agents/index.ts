@@ -441,6 +441,7 @@ export async function agentEstoqueLogistica(
   // Caso especial: Performance de Veículos (NÃO rotas)
   if (isVehicleQuestion) {
     const vehicleData = await DataAdapter.get_vehicle_performance('dezembro')
+    const totalDeliveries = vehicleData.vehicles.reduce((sum, v) => sum + v.deliveries, 0)
     
     findings.push(`Frota de ${vehicleData.summary.totalVehicles} veículos`)
     findings.push(`Melhor veículo: ${vehicleData.summary.bestVehicle.name} com eficiência de ${(vehicleData.summary.bestVehicle.efficiency * 100).toFixed(2)} entregas/km`)
@@ -449,7 +450,7 @@ export async function agentEstoqueLogistica(
     evidence.push({
       metric: 'Eficiência Média da Frota',
       value: `${(vehicleData.summary.averageEfficiency * 100).toFixed(2)} entregas/km`,
-      comparison: `${vehicleData.summary.totalDeliveries} entregas totais`,
+      comparison: `${totalDeliveries} entregas totais`,
       source: 'get_vehicle_performance'
     })
     
