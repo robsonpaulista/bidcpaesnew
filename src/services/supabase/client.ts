@@ -28,14 +28,25 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'u
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' && process.env ? process.env.SUPABASE_ANON_KEY : undefined)
 const SUPABASE_SERVICE_ROLE_KEY = typeof process !== 'undefined' && process.env ? process.env.SUPABASE_SERVICE_ROLE_KEY : undefined
 
-// Log de debug (apenas em desenvolvimento)
-if (import.meta.env.DEV) {
-  console.log('🔍 Configuração Supabase:', {
+// Log de debug (apenas em desenvolvimento ou se não configurado)
+const isDev = import.meta.env?.DEV || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development')
+const isMissingConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY
+
+if (isDev || isMissingConfig) {
+  const configStatus = {
     hasUrl: !!SUPABASE_URL,
     hasAnonKey: !!SUPABASE_ANON_KEY,
     hasServiceKey: !!SUPABASE_SERVICE_ROLE_KEY,
-    urlPreview: SUPABASE_URL ? SUPABASE_URL.substring(0, 30) + '...' : 'NÃO CONFIGURADO'
-  })
+    urlPreview: SUPABASE_URL ? SUPABASE_URL.substring(0, 30) + '...' : 'FALTANDO',
+    keyPreview: SUPABASE_ANON_KEY ? SUPABASE_ANON_KEY.substring(0, 20) + '...' : 'FALTANDO'
+  }
+  
+  if (isMissingConfig) {
+    console.error('⚠️ Supabase não configurado. URL:', configStatus.urlPreview, 'Key:', configStatus.keyPreview)
+    console.warn('💡 Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no arquivo .env (dev) ou no Vercel Dashboard (prod)')
+  } else if (isDev) {
+    console.log('🔍 Configuração Supabase:', configStatus)
+  }
 }
 
 // Cliente para frontend (anon key)

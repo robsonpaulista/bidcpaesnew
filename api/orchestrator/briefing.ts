@@ -36,6 +36,20 @@ export default async function handler(
   }
 
   try {
+    // Valida variáveis de ambiente
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      console.error('❌ Supabase não configurado no Vercel')
+      res.status(500).json({ 
+        error: 'Supabase não configurado',
+        message: 'Configure SUPABASE_URL e SUPABASE_ANON_KEY no Vercel Dashboard',
+        details: {
+          hasUrl: !!process.env.SUPABASE_URL,
+          hasAnonKey: !!process.env.SUPABASE_ANON_KEY
+        }
+      })
+      return
+    }
+
     // Pega data da query (ou usa hoje)
     const date = req.query?.date || new Date().toISOString().split('T')[0]
 
@@ -47,23 +61,48 @@ export default async function handler(
       query: {
         date: `eq.${date}`,
         limit: '1'
-      }
+      },
+      useServiceRole: false
     })
 
     if (error) {
-      res.status(500).json({ error: 'Erro ao buscar briefing', message: String(error) })
-      return
+      console.error('❌ Erro ao buscar briefing no Supabase:', error)
+      // Se erro, tenta gerar na hora (fallback)
+      try {
+        const { generateBriefing } = await import('../../src/services/orchestrator/briefing')
+        const generated = await generateBriefing(date)
+        res.status(200).json(generated)
+        return
+      } catch (genError) {
+        res.status(500).json({ 
+          error: 'Erro ao buscar briefing', 
+          message: String(error),
+          fallbackError: genError instanceof Error ? genError.message : 'Unknown error'
+        })
+        return
+      }
     }
 
     const briefing = Array.isArray(data) ? data[0] : data
 
     if (!briefing) {
       // Se não existe, gera na hora (fallback)
-      const { generateBriefing } = await import('../../src/services/orchestrator/briefing')
-      const generated = await generateBriefing(date)
-      
-      res.status(200).json(generated)
-      return
+      try {
+        const { generateBriefing } = await import('../../src/services/orchestrator/briefing')
+        const generated = await generateBriefing(date)
+        res.status(200).json(generated)
+        return
+      } catch (genError) {
+        res.status(200).json({
+          date,
+          summary: 'Briefing ainda não foi gerado. Configure as variáveis de ambiente do Supabase no Vercel.',
+          topAlerts: [],
+          topCases: [],
+          kpiHighlights: [],
+          recommendations: []
+        })
+        return
+      }
     }
 
     res.status(200).json(briefing)
@@ -73,7 +112,8 @@ export default async function handler(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     res.status(500).json({ 
       error: 'Internal server error',
-      message: errorMessage 
+      message: errorMessage,
+      hint: 'Verifique as variáveis de ambiente do Supabase no Vercel Dashboard'
     })
   }
 }

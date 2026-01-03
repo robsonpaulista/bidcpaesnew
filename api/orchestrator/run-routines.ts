@@ -58,6 +58,20 @@ export default async function handler(
   }
 
   try {
+    // Valida variáveis de ambiente antes de começar
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('❌ Supabase não configurado no Vercel')
+      res.status(500).json({ 
+        error: 'Supabase não configurado',
+        message: 'Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no Vercel Dashboard',
+        details: {
+          hasUrl: !!process.env.SUPABASE_URL,
+          hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+        }
+      })
+      return
+    }
+
     const startTime = Date.now()
     const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
 

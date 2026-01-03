@@ -32,6 +32,14 @@ export default async function handler(
   // GET: lista eventos
   if (req.method === 'GET') {
     try {
+      // Valida variáveis de ambiente
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        console.error('❌ Supabase não configurado no Vercel')
+        // Retorna array vazio em vez de erro (melhor UX)
+        res.status(200).json([])
+        return
+      }
+
       const limit = parseInt(req.query?.limit || '20')
       const unreadOnly = req.query?.unread === 'true'
 
@@ -48,18 +56,22 @@ export default async function handler(
 
       const { data, error } = await supabaseFetch('events', {
         method: 'GET',
-        query
+        query,
+        useServiceRole: false
       })
 
       if (error) {
-        res.status(500).json({ error: 'Erro ao buscar eventos', message: String(error) })
+        console.error('❌ Erro ao buscar eventos:', error)
+        // Retorna array vazio em vez de erro (melhor UX)
+        res.status(200).json([])
         return
       }
 
       res.status(200).json(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('❌ Erro ao buscar eventos:', error)
-      res.status(500).json({ error: 'Internal server error' })
+      // Retorna array vazio em vez de erro (melhor UX)
+      res.status(200).json([])
     }
     return
   }
