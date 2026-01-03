@@ -57,8 +57,13 @@ export async function runRoutinesLocal(): Promise<{
       })
 
       if (!error && data) {
-        const alertId = Array.isArray(data) ? data[0]?.id : data?.id
-        savedAlerts.push(alertId)
+        const alertData = Array.isArray(data) ? data[0] : data
+        const alertId = alertData && typeof alertData === 'object' && 'id' in alertData 
+          ? (alertData as any).id 
+          : undefined
+        if (alertId) {
+          savedAlerts.push(alertId)
+        }
         
         // Cria evento para cada alerta novo
         await supabaseFetch('events', {

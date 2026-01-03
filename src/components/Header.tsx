@@ -2,7 +2,7 @@ import { Menu, Search, User, Calendar } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 
 // Lazy load para evitar quebrar se houver erro
-const EventsFeed = lazy(() => import('./EventsFeed').catch(() => ({ default: () => null })))
+const EventsFeed = lazy(() => import('./EventsFeed').catch(() => ({ default: () => <div /> })))
 
 interface HeaderProps {
   onMenuClick: () => void

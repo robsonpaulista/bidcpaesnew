@@ -96,20 +96,24 @@ export async function validateCase(request: ValidateCaseRequest): Promise<Operat
     throw new Error('Caso não encontrado')
   }
   
-  return {
+  const updatedCase: OperationalCase = {
     ...mockCase,
-    status: request.validated ? 'validado' : 'rejeitado',
-    validationHistory: [
-      ...(mockCase.validationHistory || []),
-      {
-        hypothesisId: request.hypothesisId,
-        validated: request.validated,
-        comment: request.comment,
-        validatedBy: 'Usuário',
-        validatedAt: new Date().toISOString()
-      }
-    ]
+    status: request.validated ? 'validado' : 'em_investigacao'
   }
+  
+  // Adiciona validação ao histórico se existir
+  if (updatedCase.validationChecklist && request.hypothesisId) {
+    const checklistItem = updatedCase.validationChecklist.find(
+      item => item.id === request.hypothesisId
+    )
+    if (checklistItem) {
+      checklistItem.checked = request.validated
+      checklistItem.checkedBy = 'Usuário'
+      checklistItem.checkedAt = new Date().toISOString()
+    }
+  }
+  
+  return updatedCase
 }
 
 // ==========================================
@@ -161,9 +165,9 @@ export async function getBriefing(date?: string): Promise<any> {
 
         if (!fetchError && data) {
           const briefing = Array.isArray(data) ? data[0] : data
-          if (briefing && briefing.date) {
-            console.log('✅ Briefing encontrado no Supabase:', briefing.date)
-            return briefing
+          if (briefing && typeof briefing === 'object' && 'date' in briefing) {
+            console.log('✅ Briefing encontrado no Supabase:', (briefing as any).date)
+            return briefing as any
           }
         }
 

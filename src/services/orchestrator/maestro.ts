@@ -321,17 +321,18 @@ function consolidateResponses(
   const relevantActions = allActions.filter(action => 
     isRelevantForIntention(action, intentionDef?.id)
   )
-  const prioritizedActions = [
+  const prioritizedActions: OrchestratorResponse['synthesis']['suggestedActions'] = [
     ...relevantActions,
     ...allActions.filter(a => !relevantActions.includes(a))
   ].slice(0, 5)
     .map((action, idx) => {
       // Mapeia ação para owner sugerido baseado em palavras-chave
       const owner = inferOwnerFromAction(action, intentionDef)
+      const priority: 'high' | 'medium' | 'low' = idx < 2 ? 'high' : idx < 4 ? 'medium' : 'low'
       
       return {
         action,
-        priority: idx < 2 ? 'high' : idx < 4 ? 'medium' : 'low' as const,
+        priority,
         estimatedImpact: inferImpactFromAction(action),
         owner,
         requiresApproval: true // Sempre requer aprovação humana
@@ -372,6 +373,27 @@ function consolidateResponses(
     suggestedActions: prioritizedActions,
     validationLinks,
     dataLimitations
+  }
+}
+
+// ==========================================
+// FUNÇÕES AUXILIARES DE CONFIANÇA
+// ==========================================
+
+function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' {
+  if (confidence >= 80) return 'high'
+  if (confidence >= 60) return 'medium'
+  return 'low'
+}
+
+function formatConfidenceMessage(confidence: number): string {
+  const level = getConfidenceLevel(confidence)
+  if (level === 'high') {
+    return 'Análise com alta confiança'
+  } else if (level === 'medium') {
+    return 'Análise com confiança moderada'
+  } else {
+    return 'Análise preliminar - dados limitados'
   }
 }
 

@@ -140,12 +140,16 @@ export async function get_margin_by_product(period: string): Promise<MarginByPro
   const baseRevenue = receitaMensal[receitaMensal.length - 1].value || 0
   
   const products = mixData.map((mix) => {
-    const revenue = (baseRevenue * (mix.atual || 0)) / 100
-    const margin = mix.margem || 28.7 // Usa margem real do mix
+    const atual = typeof mix.atual === 'number' ? mix.atual : 0
+    const ideal = typeof mix.ideal === 'number' ? mix.ideal : 0
+    const margem = typeof mix.margem === 'number' ? mix.margem : 28.7
+    
+    const revenue = (baseRevenue * atual) / 100
+    const margin = margem // Usa margem real do mix
     const cost = revenue * (1 - margin / 100)
     
     // Calcula variação baseada na diferença entre atual e ideal
-    const change = ((mix.atual || 0) - (mix.ideal || 0)) * 0.5
+    const change = (atual - ideal) * 0.5
 
     return {
       name: mix.name,
@@ -252,13 +256,15 @@ export async function get_supplier_variation(
   )
 
   // Usa variação real dos dados mockados
-  const basePrice = inputData?.value || 4.85
-  const realVariation = inputData?.variacao || 0
+  const basePrice = typeof inputData?.value === 'number' ? inputData.value : 4.85
+  const realVariation = typeof inputData?.variacao === 'number' ? inputData.variacao : 0
 
   const suppliers = performanceFornecedores.map(supplier => {
     // Calcula preço baseado na variação real e performance do fornecedor
     // Fornecedores com melhor qualidade/OTD tendem a ter preços mais estáveis
-    const supplierFactor = (supplier.qualidade || 95) / 100
+    const qualidade = typeof supplier.qualidade === 'number' ? supplier.qualidade : 95
+    const otd = typeof supplier.otd === 'number' ? supplier.otd : 0
+    const supplierFactor = qualidade / 100
     const variation = realVariation * (1 - supplierFactor * 0.3) // Reduz variação para bons fornecedores
     const price = basePrice * (1 + variation / 100)
 
@@ -266,8 +272,8 @@ export async function get_supplier_variation(
       name: supplier.name,
       price: Number(price.toFixed(2)),
       variation: Number(variation.toFixed(1)),
-      otd: supplier.otd || 0,
-      quality: supplier.qualidade || 0
+      otd: otd,
+      quality: qualidade
     }
   })
 
@@ -284,13 +290,16 @@ export async function get_stock_coverage(
     s.name.toLowerCase().includes(product.toLowerCase())
   )
 
+  const cobertura = typeof stockData?.cobertura === 'number' ? stockData.cobertura : 8
+  const valor = typeof stockData?.valor === 'number' ? stockData.valor : 0
+  
   return {
     product,
     period,
-    coverage: stockData?.cobertura || 8,
-    stock: stockData?.valor || 0,
-    value: stockData?.valor || 0,
-    trend: 'neutral'
+    coverage: cobertura,
+    stock: valor,
+    value: valor,
+    trend: 'neutral' as const
   }
 }
 
@@ -299,12 +308,16 @@ export async function get_otif(period: string): Promise<OTIF> {
 
   const lastOTIF = otifHistorico[otifHistorico.length - 1]
 
+  const otif = typeof lastOTIF.otif === 'number' ? lastOTIF.otif : 94.7
+  const prazo = typeof lastOTIF.prazo === 'number' ? lastOTIF.prazo : 96.2
+  const completo = typeof lastOTIF.completo === 'number' ? lastOTIF.completo : 98.3
+  
   return {
     period,
-    otif: lastOTIF.otif || 94.7,
-    onTime: lastOTIF.prazo || 96.2,
-    inFull: lastOTIF.completo || 98.3,
-    trend: 'up'
+    otif: otif,
+    onTime: prazo,
+    inFull: completo,
+    trend: 'up' as const
   }
 }
 
@@ -314,12 +327,18 @@ export async function get_sales_mix(
 ): Promise<SalesMix> {
   await new Promise(resolve => setTimeout(resolve, 350))
 
-  const mix = mixProdutos.map(m => ({
-    product: m.name,
-    actual: m.atual || 0,
-    ideal: m.ideal || 0,
-    margin: m.margem || 0
-  }))
+  const mix = mixProdutos.map(m => {
+    const atual = typeof m.atual === 'number' ? m.atual : 0
+    const ideal = typeof m.ideal === 'number' ? m.ideal : 0
+    const margem = typeof m.margem === 'number' ? m.margem : 0
+    
+    return {
+      product: m.name,
+      actual: atual,
+      ideal: ideal,
+      margin: margem
+    }
+  })
 
   return { period, channel, mix }
 }
@@ -351,11 +370,15 @@ export interface RevenueMonthly {
 export async function get_revenue_monthly(period: string): Promise<RevenueMonthly> {
   await new Promise(resolve => setTimeout(resolve, 300))
 
-  const months = receitaMensal.map(m => ({
-    month: m.name,
-    value: m.value || 0,
-    meta: m.meta
-  }))
+  const months = receitaMensal.map(m => {
+    const meta = typeof m.meta === 'number' ? m.meta : undefined
+    
+    return {
+      month: m.name,
+      value: m.value || 0,
+      meta: meta
+    }
+  })
 
   const values = months.map(m => m.value)
   const total = values.reduce((sum, val) => sum + val, 0)

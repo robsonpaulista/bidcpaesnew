@@ -444,7 +444,11 @@ export async function mapQuestionToIntentionWithLLM(
 
     // Merge entidades do contexto (prioridade)
     if (context) {
-      result.entities = { ...result.entities, ...context }
+      const contextEntities: Record<string, string | undefined> = {}
+      for (const [key, value] of Object.entries(context)) {
+        contextEntities[key] = typeof value === 'string' ? value : String(value ?? '')
+      }
+      result.entities = { ...result.entities, ...contextEntities }
     }
 
     // Salva no cache (Redis ou memória)

@@ -87,9 +87,6 @@ export async function generateBriefing(date: string): Promise<Briefing> {
 
   const events = (Array.isArray(eventsData) ? eventsData : []) as any[]
 
-  // 4. Gera resumo executivo
-  const summary = generateExecutiveSummary(alertsArray, casesArray, eventsArray)
-  
   // Garante que são arrays
   const alertsArray = Array.isArray(alerts) ? alerts : []
   const casesArray = Array.isArray(cases) ? cases : []
@@ -151,6 +148,9 @@ export async function generateBriefing(date: string): Promise<Briefing> {
 
   // 8. Recomendações (baseadas nos alertas)
   const recommendations = extractRecommendations(alertsArray, casesArray)
+
+  // 9. Gera resumo executivo
+  const summary = generateExecutiveSummary(alertsArray, casesArray, eventsArray)
 
   return {
     date,

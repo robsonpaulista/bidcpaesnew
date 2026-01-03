@@ -45,11 +45,16 @@ export async function testLLMConfiguration(): Promise<{
     const testQuestion = 'qual a oscilação do faturamento mensal?'
     const mapping = await mapQuestionToIntentionWithLLM(testQuestion)
     
+    const entities: Record<string, string> = {}
+    for (const [key, value] of Object.entries(mapping.entities)) {
+      entities[key] = value || ''
+    }
+    
     result.testResult = {
       success: true,
       intent: mapping.intent,
       confidence: mapping.confidence,
-      entities: mapping.entities
+      entities: entities
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'

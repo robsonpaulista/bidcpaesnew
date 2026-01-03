@@ -109,8 +109,7 @@ const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
       const request: AskRequest = {
         question: userMessage.content,
         context: currentArea ? {
-          area: currentArea,
-          unit: currentArea === 'home' ? undefined : currentArea
+          area: currentArea
         } : undefined
       }
 
