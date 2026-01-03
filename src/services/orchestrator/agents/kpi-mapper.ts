@@ -51,13 +51,15 @@ export const KPI_MAPPINGS: Record<string, KPIMapping[]> = {
   ],
   logistica: [
     { keywords: ['otif'], kpiId: 'otif', kpiLabel: 'OTIF' },
-    { keywords: ['entrega prazo', 'prazo entrega'], kpiId: 'entrega_prazo', kpiLabel: 'Entrega no Prazo' },
+    { keywords: ['entrega prazo', 'prazo entrega', 'entrega no prazo'], kpiId: 'entrega_prazo', kpiLabel: 'Entrega no Prazo' },
     { keywords: ['pedidos completos', 'pedido completo'], kpiId: 'pedidos_completos', kpiLabel: 'Pedidos Completos' },
     { keywords: ['custo entrega', 'custo por entrega'], kpiId: 'custo_entrega', kpiLabel: 'Custo por Entrega' },
     { keywords: ['custo km', 'custo por km'], kpiId: 'custo_km', kpiLabel: 'Custo por Km' },
     { keywords: ['avarias logística', 'avarias logistica'], kpiId: 'avarias_logistica', kpiLabel: 'Avarias Logística' },
     { keywords: ['devoluções', 'devolucoes'], kpiId: 'devolucoes', kpiLabel: 'Devoluções' },
     { keywords: ['reentregas'], kpiId: 'reentregas', kpiLabel: 'Reentregas' },
+    { keywords: ['custo rota', 'custo por rota', 'rotas', 'rota'], kpiId: 'rotas', kpiLabel: 'Custo por Rota' },
+    { keywords: ['veículo', 'veículos', 'veiculos', 'performance veículo', 'performance veículos', 'eficiência veículo', 'eficiencia veiculo'], kpiId: 'veiculos', kpiLabel: 'Performance de Veículos' },
   ],
   financeiro: [
     { keywords: ['receita líquida', 'receita liquida'], kpiId: 'receita_liquida', kpiLabel: 'Receita Líquida' },

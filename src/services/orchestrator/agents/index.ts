@@ -389,23 +389,32 @@ export async function agentEstoqueLogistica(
   const recommendations: string[] = []
 
   const lowerQuestion = question.toLowerCase()
+  
+  // Determina se é pergunta sobre estoque ou logística
   const isEstoqueQuestion = lowerQuestion.includes('estoque') || 
                             lowerQuestion.includes('acurácia') || 
                             lowerQuestion.includes('acuracia') ||
                             lowerQuestion.includes('inventário') ||
                             lowerQuestion.includes('inventario') ||
-                            lowerQuestion.includes('giro') ||
-                            lowerQuestion.includes('cobertura')
+                            lowerQuestion.includes('giro') && !lowerQuestion.includes('custo por km') ||
+                            lowerQuestion.includes('cobertura') && !lowerQuestion.includes('entrega')
   
-  const isRouteQuestion = lowerQuestion.includes('rota') ||
-                          lowerQuestion.includes('rotas') ||
-                          lowerQuestion.includes('custo por rota') ||
-                          lowerQuestion.includes('custo por entrega') ||
-                          lowerQuestion.includes('eficiência') ||
-                          lowerQuestion.includes('eficiencia') ||
-                          lowerQuestion.includes('viável') ||
-                          lowerQuestion.includes('viavel') ||
-                          context?.intention === 'analyze_logistics_cost'
+  // SEMPRE busca KPIs da área apropriada
+  const area = isEstoqueQuestion ? 'estoque' : 'logistica'
+  const kpisData = await DataAdapter.get_kpis_overview('dezembro', area)
+  const allKPIs = kpisData.kpis || []
+  
+  // Mapeia perguntas para KPIs específicos
+  const mappedKPIs = mapQuestionToKPIs(question, area)
+  
+  // Casos especiais para logística
+  const isVehicleQuestion = mappedKPIs.some(m => m.kpiId === 'veiculos') ||
+                            (lowerQuestion.includes('veículo') || lowerQuestion.includes('veículos') || lowerQuestion.includes('veiculos')) &&
+                            !lowerQuestion.includes('rota') && !lowerQuestion.includes('rotas')
+  
+  const isRouteQuestion = mappedKPIs.some(m => m.kpiId === 'rotas') ||
+                          (lowerQuestion.includes('rota') || lowerQuestion.includes('rotas')) &&
+                          !lowerQuestion.includes('veículo') && !lowerQuestion.includes('veículos')
   
   const isEquilibriumQuestion = lowerQuestion.includes('ponto de equilíbrio') ||
                                 lowerQuestion.includes('ponto de equilibrio') ||
@@ -413,8 +422,60 @@ export async function agentEstoqueLogistica(
                                 lowerQuestion.includes('equilibrio') ||
                                 lowerQuestion.includes('break even')
 
-  // Analisa custo por rota (prioridade se for pergunta sobre rotas)
-  if (isRouteQuestion) {
+  // Se mapeou para KPIs específicos (exceto casos especiais), retorna esses KPIs
+  if (mappedKPIs.length > 0 && !isVehicleQuestion && !isRouteQuestion) {
+    for (const mapped of mappedKPIs) {
+      const kpi = allKPIs.find(k => k.id === mapped.kpiId)
+      if (kpi) {
+        findings.push(`${mapped.kpiLabel}: ${kpi.value}${kpi.unit || ''}`)
+        evidence.push({
+          metric: mapped.kpiLabel,
+          value: `${kpi.value}${kpi.unit || ''}`,
+          comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+          source: 'get_kpis_overview'
+        })
+      }
+    }
+  }
+
+  // Caso especial: Performance de Veículos (NÃO rotas)
+  if (isVehicleQuestion) {
+    const vehicleData = await DataAdapter.get_vehicle_performance('dezembro')
+    
+    findings.push(`Frota de ${vehicleData.summary.totalVehicles} veículos`)
+    findings.push(`Melhor veículo: ${vehicleData.summary.bestVehicle.name} com eficiência de ${(vehicleData.summary.bestVehicle.efficiency * 100).toFixed(2)} entregas/km`)
+    findings.push(`Pior veículo: ${vehicleData.summary.worstVehicle.name} com eficiência de ${(vehicleData.summary.worstVehicle.efficiency * 100).toFixed(2)} entregas/km`)
+    
+    evidence.push({
+      metric: 'Eficiência Média da Frota',
+      value: `${(vehicleData.summary.averageEfficiency * 100).toFixed(2)} entregas/km`,
+      comparison: `${vehicleData.summary.totalDeliveries} entregas totais`,
+      source: 'get_vehicle_performance'
+    })
+    
+    // Top 3 veículos
+    const topVehicles = [...vehicleData.vehicles]
+      .sort((a, b) => b.efficiency - a.efficiency)
+      .slice(0, 3)
+    
+    topVehicles.forEach(vehicle => {
+      evidence.push({
+        metric: `${vehicle.name}`,
+        value: `${vehicle.deliveries} entregas`,
+        comparison: `Eficiência: ${(vehicle.efficiency * 100).toFixed(2)} entregas/km | Capacidade: ${vehicle.capacity}%`,
+        source: 'get_vehicle_performance'
+      })
+    })
+    
+    const efficiencyDiff = vehicleData.summary.bestVehicle.efficiency - vehicleData.summary.worstVehicle.efficiency
+    if (efficiencyDiff > 0.01) {
+      recommendations.push(`Otimizar ${vehicleData.summary.worstVehicle.name} para melhorar eficiência`)
+      recommendations.push(`Priorizar uso de ${vehicleData.summary.bestVehicle.name} em rotas mais longas`)
+    }
+  }
+  
+  // Caso especial: Custo por Rota (NÃO veículos)
+  else if (isRouteQuestion) {
     const routeData = await DataAdapter.get_route_cost('dezembro')
     
     // Se pergunta sobre ponto de equilíbrio, faz análise comparativa detalhada
@@ -527,17 +588,24 @@ export async function agentEstoqueLogistica(
       }
     }
     
-    // Análise de performance de veículos (opcional)
-    if (context?.intention === 'analyze_logistics_cost') {
-      const vehicleData = await DataAdapter.get_vehicle_performance('dezembro')
+  } 
+  
+  // Se não mapeou para KPIs específicos e não é caso especial, retorna KPIs principais
+  if (mappedKPIs.length === 0 && !isVehicleQuestion && !isRouteQuestion && findings.length === 0 && !isEstoqueQuestion) {
+    const mainKPIs = allKPIs.slice(0, 3) // Primeiros 3 KPIs
+    for (const kpi of mainKPIs) {
+      findings.push(`${kpi.label}: ${kpi.value}${kpi.unit || ''}`)
       evidence.push({
-        metric: 'Eficiência Média da Frota',
-        value: `${(vehicleData.summary.averageEfficiency * 100).toFixed(2)} entregas/km`,
-        comparison: `Melhor veículo: ${vehicleData.summary.bestVehicle.name}`,
-        source: 'get_vehicle_performance'
+        metric: kpi.label,
+        value: `${kpi.value}${kpi.unit || ''}`,
+        comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+        source: 'get_kpis_overview'
       })
     }
-  } else if (isEstoqueQuestion) {
+  }
+  
+  // Analisa KPIs de estoque
+  if (isEstoqueQuestion) {
     // Analisa KPIs de estoque
     const kpis = await DataAdapter.get_kpis_overview('dezembro', 'estoque')
     
@@ -585,29 +653,46 @@ export async function agentEstoqueLogistica(
     }
   }
 
-  // Analisa OTIF (se for pergunta sobre logística, mas não sobre rotas)
-  if ((lowerQuestion.includes('otif') || lowerQuestion.includes('entrega') || lowerQuestion.includes('logística')) && !isRouteQuestion) {
-    const otifData = await DataAdapter.get_otif('dezembro')
-    if (otifData.otif < 95) {
-      findings.push(`OTIF de ${otifData.otif}% abaixo da meta de 95%`)
-      evidence.push({
-        metric: 'OTIF',
-        value: `${otifData.otif}%`,
-        comparison: 'Meta: 95%',
-        source: 'get_otif'
-      })
-      
-      if (otifData.onTime < 95) {
-        recommendations.push('Melhorar planejamento de rotas')
+    // Se mapeou para KPIs específicos de estoque, retorna esses KPIs
+    if (mappedKPIs.length > 0) {
+      for (const mapped of mappedKPIs) {
+        const kpi = allKPIs.find(k => k.id === mapped.kpiId)
+        if (kpi) {
+          findings.push(`${mapped.kpiLabel}: ${kpi.value}${kpi.unit || ''}`)
+          evidence.push({
+            metric: mapped.kpiLabel,
+            value: `${kpi.value}${kpi.unit || ''}`,
+            comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+            source: 'get_kpis_overview'
+          })
+        }
       }
-      if (otifData.inFull < 98) {
-        recommendations.push('Revisar processos de picking e separação')
+    } else if (findings.length === 0) {
+      // Se não mapeou para KPIs específicos, retorna KPIs principais de estoque
+      const mainKPIs = allKPIs.slice(0, 3)
+      for (const kpi of mainKPIs) {
+        findings.push(`${kpi.label}: ${kpi.value}${kpi.unit || ''}`)
+        evidence.push({
+          metric: kpi.label,
+          value: `${kpi.value}${kpi.unit || ''}`,
+          comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+          source: 'get_kpis_overview'
+        })
       }
     }
   }
+  
+  // Análises específicas baseadas em KPIs (apenas se não já foram adicionadas)
+  if (!isEstoqueQuestion && area === 'logistica') {
+    const otifKPI = allKPIs.find(k => k.id === 'otif')
+    if (otifKPI && otifKPI.value < 95 && !mappedKPIs.find(m => m.kpiId === 'otif') && !isRouteQuestion && !isVehicleQuestion) {
+      findings.push(`OTIF de ${otifKPI.value}% abaixo da meta de 95%`)
+      recommendations.push('Melhorar planejamento de rotas e processos de picking')
+    }
+  }
 
-  // Analisa cobertura de estoque
-  if (context?.product) {
+  // Analisa cobertura de estoque (apenas se produto específico)
+  if (context?.product && isEstoqueQuestion) {
     const stockData = await DataAdapter.get_stock_coverage(
       context.product as string,
       'dezembro'
