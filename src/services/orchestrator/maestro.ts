@@ -7,7 +7,7 @@ import {
   InvestigationPlan,
   AskRequest,
   AgentType
-} from './types'
+} from './types.js'
 import { agents } from './agents/index.js'
 import {
   mapQuestionToIntention,
@@ -15,8 +15,8 @@ import {
   intentions,
   isGenericIntention,
   type BusinessIntention
-} from './intentions'
-import { mapQuestionToIntentionWithLLM, llmConfig as config } from './llm-mapper'
+} from './intentions.js'
+import { mapQuestionToIntentionWithLLM, llmConfig as config } from './llm-mapper.js'
 
 // ==========================================
 // ANÁLISE DE INTENÇÃO
