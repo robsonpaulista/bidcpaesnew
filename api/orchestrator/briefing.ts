@@ -3,6 +3,9 @@
 // ==========================================
 // Retorna briefing do dia (ou data específica)
 
+// Import estático para evitar problemas com imports dinâmicos no Vercel
+import { supabaseFetch } from '../../src/services/supabase/client'
+
 interface VercelRequest {
   method?: string
   query?: Record<string, string>
@@ -60,9 +63,7 @@ export default async function handler(
     // Pega data da query (ou usa hoje)
     const date = (typeof req.query?.date === 'string' ? req.query.date : null) || new Date().toISOString().split('T')[0]
 
-    // Busca briefing do Supabase
-    const { supabaseFetch } = await import('../../src/services/supabase/client')
-    
+    // Busca briefing do Supabase (usando import estático)
     let data: any = null
     let error: any = null
     
@@ -101,7 +102,8 @@ export default async function handler(
       console.error('❌ Erro ao buscar briefing no Supabase:', error)
       // Se erro, tenta gerar na hora (fallback)
       try {
-        const { generateBriefing } = await import('../../src/services/orchestrator/briefing')
+        const briefingModule = await import('../../src/services/orchestrator/briefing')
+        const { generateBriefing } = briefingModule
         const generated = await generateBriefing(date)
         res.status(200).json(generated)
         return
@@ -124,7 +126,8 @@ export default async function handler(
     if (!briefing || (typeof briefing === 'object' && !('date' in briefing))) {
       // Se não existe, gera na hora (fallback)
       try {
-        const { generateBriefing } = await import('../../src/services/orchestrator/briefing')
+        const briefingModule = await import('../../src/services/orchestrator/briefing')
+        const { generateBriefing } = briefingModule
         const generated = await generateBriefing(date)
         res.status(200).json(generated)
         return

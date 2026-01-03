@@ -3,6 +3,9 @@
 // ==========================================
 // Retorna feed de eventos (atividades dos agentes)
 
+// Import estático para evitar problemas com imports dinâmicos no Vercel
+import { supabaseFetch } from '../../src/services/supabase/client'
+
 interface VercelRequest {
   method?: string
   query?: Record<string, string>
@@ -43,8 +46,6 @@ export default async function handler(
       const limit = parseInt(req.query?.limit || '20')
       const unreadOnly = req.query?.unread === 'true'
 
-      const { supabaseFetch } = await import('../../src/services/supabase/client')
-      
       const query: Record<string, string> = {
         order: 'timestamp.desc',
         limit: String(limit)
@@ -85,8 +86,6 @@ export default async function handler(
     }
 
     try {
-      const { supabaseFetch } = await import('../../src/services/supabase/client')
-      
       const { error } = await supabaseFetch('events', {
         method: 'PATCH',
         body: { read: true },

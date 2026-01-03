@@ -4,6 +4,9 @@
 // Executa rotinas automáticas: gera alertas, cria eventos, gera briefing
 // Deve ser chamado via cron (GitHub Actions) 1x por dia
 
+// Import estático para evitar problemas com imports dinâmicos no Vercel
+import { supabaseFetch } from '../../src/services/supabase/client'
+
 interface VercelRequest {
   method?: string
   body?: any
