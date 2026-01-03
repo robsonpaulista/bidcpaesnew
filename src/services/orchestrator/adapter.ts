@@ -16,7 +16,7 @@ import {
   SalesMix,
   RouteCost,
   VehiclePerformance
-} from './types'
+} from './types.js'
 import {
   homeKPIs,
   comercialKPIs,
@@ -39,7 +39,7 @@ import {
   custoLogisticoPorRota,
   performanceVeiculos,
   evolucaoPrecos
-} from '../mockData'
+} from '../mockData.js'
 
 // ==========================================
 // FUNÇÕES SEMÂNTICAS

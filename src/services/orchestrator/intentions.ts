@@ -3,7 +3,7 @@
 // ==========================================
 // Define intenções claras e mapeia para planos de investigação
 
-import { AgentType } from './types'
+import { AgentType } from './types.js'
 
 // ==========================================
 // TIPOS DE INTENÇÕES

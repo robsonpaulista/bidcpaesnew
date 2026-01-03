@@ -4,7 +4,7 @@
 // IMPORTANTE: LLM NÃO DECIDE NADA, apenas mapeia e extrai entidades
 // O orquestrador (código) decide o plano, queries, lógica
 
-import { BusinessIntention, intentions } from './intentions'
+import { BusinessIntention, intentions } from './intentions.js'
 
 // ==========================================
 // TIPOS
@@ -372,7 +372,7 @@ function mapWithKeywords(question: string, context?: Record<string, unknown>): L
 // ==========================================
 // Usa Redis (Upstash) em produção, fallback em memória
 
-import { getCachedMapping, setCachedMapping } from './cache'
+import { getCachedMapping, setCachedMapping } from './cache.js'
 
 // ==========================================
 // FUNÇÃO PRINCIPAL

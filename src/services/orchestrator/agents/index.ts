@@ -2,8 +2,8 @@
 // AGENTES ESPECIALISTAS
 // ==========================================
 
-import { AgentType, AgentResponse } from '../types'
-import { DataAdapter } from '../adapter'
+import { AgentType, AgentResponse } from '../types.js'
+import { DataAdapter } from '../adapter.js'
 
 // ==========================================
 // AGENTE: CUSTOS & MARGEM
