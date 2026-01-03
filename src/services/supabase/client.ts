@@ -123,6 +123,10 @@ export async function supabaseFetch(
       if (k === 'limit' || k === 'order') {
         // Campos especiais do PostgREST
         url.searchParams.set(k, v)
+      } else if (k.includes('.')) {
+        // Se a chave contém ponto (ex: "timestamp.gte"), separa em coluna e operador
+        const [column, operator] = k.split('.', 2)
+        url.searchParams.set(column, `${operator}.${v}`)
       } else if (v.includes('.')) {
         // Se o valor já contém ponto, assume que já está no formato correto (ex: "eq.2026-01-03")
         url.searchParams.set(k, v)

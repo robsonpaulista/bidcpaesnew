@@ -51,7 +51,7 @@ export default async function handler(
     }
 
     // Pega data da query (ou usa hoje)
-    const date = req.query?.date || new Date().toISOString().split('T')[0]
+    const date = (typeof req.query?.date === 'string' ? req.query.date : null) || new Date().toISOString().split('T')[0]
 
     // Busca briefing do Supabase
     const { supabaseFetch } = await import('../../src/services/supabase/client')
