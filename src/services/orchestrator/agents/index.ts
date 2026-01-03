@@ -95,8 +95,12 @@ export async function agentComprasFornecedores(
   const mappedKPIs = mapQuestionToKPIs(question, 'compras')
   const lowerQuestion = question.toLowerCase()
   
-  // Se mapeou para KPIs específicos, retorna esses KPIs
-  if (mappedKPIs.length > 0) {
+  // Casos especiais que não são KPIs diretos
+  const isPerformanceQuestion = mappedKPIs.some(m => m.kpiId === 'performance') || 
+                                lowerQuestion.includes('performance') && lowerQuestion.includes('fornecedor')
+  
+  // Se mapeou para KPIs específicos (exceto casos especiais), retorna esses KPIs
+  if (mappedKPIs.length > 0 && !isPerformanceQuestion) {
     for (const mapped of mappedKPIs) {
       const kpi = allKPIs.find(k => k.id === mapped.kpiId)
       if (kpi) {
@@ -188,10 +192,7 @@ export async function agentComprasFornecedores(
   }
 
   // Analisa performance de fornecedores (geral ou específico por matéria-prima)
-  const isPerformanceQuestion = lowerQuestion.includes('performance') || 
-                               lowerQuestion.includes('fornecedor') ||
-                               lowerQuestion.includes('fornecedores')
-  
+  // isPerformanceQuestion já foi definido acima
   if (isPerformanceQuestion || context?.input) {
     // Se há matéria-prima específica, busca variação por fornecedor
     if (context?.input) {
@@ -289,18 +290,18 @@ export async function agentComprasFornecedores(
     }
   }
 
-  // KPIs de compras - usa unit do contexto se disponível
-  const unit = (context?.unit as string | undefined) || 'compras'
-  const kpis = await DataAdapter.get_kpis_overview('dezembro', unit)
-  const otdKPI = kpis.kpis.find(k => k.id === 'otd')
-  if (otdKPI && otdKPI.value < 90) {
-    findings.push('OTD de fornecedores abaixo de 90%')
-    evidence.push({
-      metric: 'OTD Fornecedores',
-      value: `${otdKPI.value}%`,
-      comparison: 'Meta: 90%',
-      source: 'get_kpis_overview'
-    })
+  // Se não mapeou para KPIs específicos e não é caso especial, retorna KPIs principais
+  if (mappedKPIs.length === 0 && !isPerformanceQuestion && findings.length === 0) {
+    const mainKPIs = allKPIs.slice(0, 3) // Primeiros 3 KPIs
+    for (const kpi of mainKPIs) {
+      findings.push(`${kpi.label}: ${kpi.value}${kpi.unit || ''}`)
+      evidence.push({
+        metric: kpi.label,
+        value: `${kpi.value}${kpi.unit || ''}`,
+        comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+        source: 'get_kpis_overview'
+      })
+    }
   }
 
   return {
