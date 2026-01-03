@@ -47,7 +47,7 @@ export async function generateBriefing(date: string): Promise<Briefing> {
   const endOfDay = `${date}T23:59:59Z`
   
   // 1. Busca alertas do dia
-  const { data: alertsData } = await supabaseFetch('alerts', {
+  const { data: alertsData, error: alertsError } = await supabaseFetch('alerts', {
     method: 'GET',
     query: {
       'timestamp.gte': startOfDay,
@@ -58,10 +58,14 @@ export async function generateBriefing(date: string): Promise<Briefing> {
     useServiceRole: false // Usa anon key em dev
   })
 
+  if (alertsError) {
+    console.warn('⚠️ Erro ao buscar alertas:', alertsError)
+  }
+
   const alerts = (Array.isArray(alertsData) ? alertsData : []) as any[]
 
   // 2. Busca casos abertos/em investigação
-  const { data: casesData } = await supabaseFetch('cases', {
+  const { data: casesData, error: casesError } = await supabaseFetch('cases', {
     method: 'GET',
     query: {
       status: 'in.(aberto,em_investigacao)',
@@ -71,10 +75,14 @@ export async function generateBriefing(date: string): Promise<Briefing> {
     useServiceRole: false // Usa anon key em dev
   })
 
+  if (casesError) {
+    console.warn('⚠️ Erro ao buscar casos:', casesError)
+  }
+
   const cases = (Array.isArray(casesData) ? casesData : []) as any[]
 
   // 3. Busca eventos do dia
-  const { data: eventsData } = await supabaseFetch('events', {
+  const { data: eventsData, error: eventsError } = await supabaseFetch('events', {
     method: 'GET',
     query: {
       'timestamp.gte': startOfDay,
@@ -84,6 +92,10 @@ export async function generateBriefing(date: string): Promise<Briefing> {
     },
     useServiceRole: false // Usa anon key em dev
   })
+
+  if (eventsError) {
+    console.warn('⚠️ Erro ao buscar eventos:', eventsError)
+  }
 
   const events = (Array.isArray(eventsData) ? eventsData : []) as any[]
 

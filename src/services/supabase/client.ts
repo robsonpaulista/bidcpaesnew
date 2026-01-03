@@ -111,8 +111,8 @@ export async function supabaseFetch(
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`)
   
-  // Para GET, adiciona query params
-  if (method === 'GET' && query) {
+  // Para GET e PATCH, adiciona query params
+  if ((method === 'GET' || method === 'PATCH') && query) {
     Object.entries(query).forEach(([k, v]) => {
       // Supabase PostgREST usa formato: coluna=operador.valor
       // Exemplos:

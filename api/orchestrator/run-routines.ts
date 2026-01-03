@@ -139,9 +139,23 @@ export default async function handler(
     const { generateBriefing } = await import('../../src/services/orchestrator/briefing')
     const briefing = await generateBriefing(today)
 
-    // 4. SALVA BRIEFING NO SUPABASE
+    // 4. SALVA BRIEFING NO SUPABASE (UPSERT - atualiza se já existe)
+    // Primeiro verifica se já existe
+    const { data: existingBriefing } = await supabaseFetch('briefings', {
+      method: 'GET',
+      query: {
+        date: `eq.${today}`,
+        limit: '1'
+      },
+      useServiceRole: true
+    })
+
+    const existing = Array.isArray(existingBriefing) ? existingBriefing[0] : existingBriefing
+    const briefingMethod = existing ? 'PATCH' : 'POST'
+    const briefingQuery = existing ? { date: `eq.${today}` } : {}
+
     const { data: briefingData, error: briefingError } = await supabaseFetch('briefings', {
-      method: 'POST',
+      method: briefingMethod,
       body: {
         date: today,
         summary: briefing.summary,
@@ -150,8 +164,39 @@ export default async function handler(
         kpi_highlights: briefing.kpiHighlights,
         recommendations: briefing.recommendations
       },
+      query: briefingQuery,
       useServiceRole: true
     })
+
+    if (briefingError) {
+      console.error('❌ Erro ao salvar briefing:', briefingError)
+      // Se for erro 409 (duplicate), tenta fazer UPDATE
+      if (typeof briefingError === 'object' && briefingError !== null && 'code' in briefingError && briefingError.code === '23505') {
+        console.log('⚠️ Briefing já existe, tentando atualizar...')
+        const { data: updateData, error: updateError } = await supabaseFetch('briefings', {
+          method: 'PATCH',
+          body: {
+            summary: briefing.summary,
+            top_alerts: briefing.topAlerts,
+            top_cases: briefing.topCases,
+            kpi_highlights: briefing.kpiHighlights,
+            recommendations: briefing.recommendations
+          },
+          query: {
+            date: `eq.${today}`
+          },
+          useServiceRole: true
+        })
+        
+        if (!updateError) {
+          console.log('✅ Briefing atualizado com sucesso')
+        } else {
+          console.error('❌ Erro ao atualizar briefing:', updateError)
+        }
+      }
+    } else {
+      console.log('✅ Briefing salvo com sucesso')
+    }
 
     // 5. CRIA EVENTO DE ROTINA EXECUTADA
     await supabaseFetch('events', {

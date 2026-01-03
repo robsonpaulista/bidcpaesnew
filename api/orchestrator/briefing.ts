@@ -60,7 +60,8 @@ export default async function handler(
       method: 'GET',
       query: {
         date: `eq.${date}`,
-        limit: '1'
+        limit: '1',
+        order: 'date.desc'
       },
       useServiceRole: false
     })
@@ -74,10 +75,14 @@ export default async function handler(
         res.status(200).json(generated)
         return
       } catch (genError) {
-        res.status(500).json({ 
-          error: 'Erro ao buscar briefing', 
-          message: String(error),
-          fallbackError: genError instanceof Error ? genError.message : 'Unknown error'
+        console.error('❌ Erro ao gerar briefing (fallback):', genError)
+        res.status(200).json({
+          date,
+          summary: 'Briefing ainda não foi gerado. Configure as variáveis de ambiente do Supabase no Vercel.',
+          topAlerts: [],
+          topCases: [],
+          kpiHighlights: [],
+          recommendations: []
         })
         return
       }
@@ -85,7 +90,7 @@ export default async function handler(
 
     const briefing = Array.isArray(data) ? data[0] : data
 
-    if (!briefing) {
+    if (!briefing || (typeof briefing === 'object' && !('date' in briefing))) {
       // Se não existe, gera na hora (fallback)
       try {
         const { generateBriefing } = await import('../../src/services/orchestrator/briefing')
@@ -93,9 +98,10 @@ export default async function handler(
         res.status(200).json(generated)
         return
       } catch (genError) {
+        console.error('❌ Erro ao gerar briefing (fallback):', genError)
         res.status(200).json({
           date,
-          summary: 'Briefing ainda não foi gerado. Configure as variáveis de ambiente do Supabase no Vercel.',
+          summary: 'Briefing ainda não foi gerado.',
           topAlerts: [],
           topCases: [],
           kpiHighlights: [],

@@ -90,10 +90,25 @@ export async function runRoutinesLocal(): Promise<{
     const briefing = await generateBriefing(today)
     console.log('✅ Briefing gerado:', briefing.summary)
 
-    // 4. SALVA BRIEFING NO SUPABASE
+    // 4. SALVA BRIEFING NO SUPABASE (UPSERT - atualiza se já existe)
     console.log('💾 Salvando briefing no Supabase...')
+    
+    // Primeiro verifica se já existe
+    const { data: existingBriefing } = await supabaseFetch('briefings', {
+      method: 'GET',
+      query: {
+        date: `eq.${today}`,
+        limit: '1'
+      },
+      useServiceRole: false
+    })
+
+    const existing = Array.isArray(existingBriefing) ? existingBriefing[0] : existingBriefing
+    const briefingMethod = existing ? 'PATCH' : 'POST'
+    const briefingQuery = existing ? { date: `eq.${today}` } : {}
+
     const { data: briefingData, error: briefingError } = await supabaseFetch('briefings', {
-      method: 'POST',
+      method: briefingMethod,
       body: {
         date: today,
         summary: briefing.summary,
@@ -102,8 +117,39 @@ export async function runRoutinesLocal(): Promise<{
         kpi_highlights: briefing.kpiHighlights,
         recommendations: briefing.recommendations
       },
+      query: briefingQuery,
       useServiceRole: false
     })
+
+    if (briefingError) {
+      console.error('❌ Erro ao salvar briefing:', briefingError)
+      // Se for erro 409 (duplicate), tenta fazer UPDATE
+      if (typeof briefingError === 'object' && briefingError !== null && 'code' in briefingError && briefingError.code === '23505') {
+        console.log('⚠️ Briefing já existe, tentando atualizar...')
+        const { data: updateData, error: updateError } = await supabaseFetch('briefings', {
+          method: 'PATCH',
+          body: {
+            summary: briefing.summary,
+            top_alerts: briefing.topAlerts,
+            top_cases: briefing.topCases,
+            kpi_highlights: briefing.kpiHighlights,
+            recommendations: briefing.recommendations
+          },
+          query: {
+            date: `eq.${today}`
+          },
+          useServiceRole: false
+        })
+        
+        if (!updateError) {
+          console.log('✅ Briefing atualizado com sucesso')
+        } else {
+          console.error('❌ Erro ao atualizar briefing:', updateError)
+        }
+      }
+    } else {
+      console.log('✅ Briefing salvo com sucesso')
+    }
 
     // 5. CRIA EVENTO DE ROTINA EXECUTADA
     await supabaseFetch('events', {
