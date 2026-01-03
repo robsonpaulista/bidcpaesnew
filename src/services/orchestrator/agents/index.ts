@@ -4,6 +4,7 @@
 
 import { AgentType, AgentResponse } from '../types.js'
 import { DataAdapter } from '../adapter.js'
+import { mapQuestionToKPI, mapQuestionToKPIs } from './kpi-mapper.js'
 
 // ==========================================
 // AGENTE: CUSTOS & MARGEM
@@ -86,7 +87,29 @@ export async function agentComprasFornecedores(
   const evidence: AgentResponse['evidence'] = []
   const recommendations: string[] = []
 
+  // SEMPRE busca KPIs da área de compras
+  const kpisData = await DataAdapter.get_kpis_overview('dezembro', 'compras')
+  const allKPIs = kpisData.kpis || []
+  
+  // Mapeia perguntas para KPIs específicos
+  const mappedKPIs = mapQuestionToKPIs(question, 'compras')
   const lowerQuestion = question.toLowerCase()
+  
+  // Se mapeou para KPIs específicos, retorna esses KPIs
+  if (mappedKPIs.length > 0) {
+    for (const mapped of mappedKPIs) {
+      const kpi = allKPIs.find(k => k.id === mapped.kpiId)
+      if (kpi) {
+        findings.push(`${mapped.kpiLabel}: ${kpi.value}${kpi.unit || ''}`)
+        evidence.push({
+          metric: mapped.kpiLabel,
+          value: `${kpi.value}${kpi.unit || ''}`,
+          comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+          source: 'get_kpis_overview'
+        })
+      }
+    }
+  }
   const isSeasonalityQuestion = lowerQuestion.includes('sazonalidade') ||
                                 lowerQuestion.includes('sazonal') ||
                                 lowerQuestion.includes('padrão') ||
@@ -164,29 +187,105 @@ export async function agentComprasFornecedores(
     }
   }
 
-  // Analisa variação de fornecedores
-  if (context?.input) {
-    const supplierData = await DataAdapter.get_supplier_variation(
-      context.input as string,
-      'dezembro'
-    )
+  // Analisa performance de fornecedores (geral ou específico por matéria-prima)
+  const isPerformanceQuestion = lowerQuestion.includes('performance') || 
+                               lowerQuestion.includes('fornecedor') ||
+                               lowerQuestion.includes('fornecedores')
+  
+  if (isPerformanceQuestion || context?.input) {
+    // Se há matéria-prima específica, busca variação por fornecedor
+    if (context?.input) {
+      const supplierData = await DataAdapter.get_supplier_variation(
+        context.input as string,
+        'dezembro'
+      )
 
-    const highVariation = supplierData.suppliers.filter(s => Math.abs(s.variation) > 3)
-    if (highVariation.length > 0) {
-      findings.push(`${highVariation.length} fornecedores com variação de preço acima de 3%`)
-      highVariation.forEach(s => {
-        evidence.push({
-          metric: `Variação ${s.name}`,
-          value: `${s.variation > 0 ? '+' : ''}${s.variation}%`,
-          source: 'get_supplier_variation'
+      const highVariation = supplierData.suppliers.filter(s => Math.abs(s.variation) > 3)
+      if (highVariation.length > 0) {
+        findings.push(`${highVariation.length} fornecedores com variação de preço acima de 3%`)
+        highVariation.forEach(s => {
+          evidence.push({
+            metric: `Variação ${s.name}`,
+            value: `${s.variation > 0 ? '+' : ''}${s.variation}%`,
+            source: 'get_supplier_variation'
+          })
         })
-      })
-    }
+      }
 
-    const lowOTD = supplierData.suppliers.filter(s => s.otd < 90)
-    if (lowOTD.length > 0) {
-      findings.push(`${lowOTD.length} fornecedores com OTD abaixo de 90%`)
-      recommendations.push('Revisar contratos e penalidades por atraso')
+      const lowOTD = supplierData.suppliers.filter(s => s.otd < 90)
+      if (lowOTD.length > 0) {
+        findings.push(`${lowOTD.length} fornecedores com OTD abaixo de 90%`)
+        recommendations.push('Revisar contratos e penalidades por atraso')
+      }
+    } else {
+      // Se não há matéria-prima específica, busca performance geral dos fornecedores
+      const kpis = await DataAdapter.get_kpis_overview('dezembro', 'compras')
+      const otdKPI = kpis.kpis.find(k => k.id === 'otd')
+      
+      // Busca dados de performance de fornecedores através do adapter
+      // Usa uma matéria-prima genérica para obter dados de todos os fornecedores
+      const supplierData = await DataAdapter.get_supplier_variation('Farinha de Trigo', 'dezembro')
+      
+      if (supplierData && supplierData.suppliers && Array.isArray(supplierData.suppliers)) {
+        const performanceFornecedores = supplierData.suppliers
+        // Analisa OTD
+        const lowOTD = performanceFornecedores.filter(s => s.otd < 90)
+        
+        if (lowOTD.length > 0) {
+          findings.push(`${lowOTD.length} fornecedores com OTD abaixo de 90%`)
+          lowOTD.forEach(s => {
+            evidence.push({
+              metric: `${s.name} - OTD`,
+              value: `${s.otd}%`,
+              comparison: `Qualidade: ${s.quality}%`,
+              source: 'get_supplier_variation'
+            })
+          })
+          recommendations.push('Revisar contratos e penalidades por atraso para fornecedores com OTD baixo')
+        }
+        
+        // Analisa qualidade
+        const lowQuality = performanceFornecedores.filter(s => s.quality < 95)
+        
+        if (lowQuality.length > 0) {
+          findings.push(`${lowQuality.length} fornecedores com qualidade abaixo de 95%`)
+          lowQuality.forEach(s => {
+            evidence.push({
+              metric: `${s.name} - Qualidade`,
+              value: `${s.quality}%`,
+              comparison: `OTD: ${s.otd}%`,
+              source: 'get_supplier_variation'
+            })
+          })
+          recommendations.push('Implementar auditorias de qualidade para fornecedores com baixa performance')
+        }
+        
+        // Melhores fornecedores
+        const topSuppliers = [...performanceFornecedores]
+          .sort((a, b) => (b.otd + b.quality) - (a.otd + a.quality))
+          .slice(0, 3)
+        
+        if (topSuppliers.length > 0) {
+          findings.push(`Melhores fornecedores: ${topSuppliers.map(s => s.name).join(', ')}`)
+          topSuppliers.forEach(s => {
+            evidence.push({
+              metric: `${s.name} - Performance`,
+              value: `OTD: ${s.otd}%, Qualidade: ${s.quality}%`,
+              comparison: 'Fornecedor de alta performance',
+              source: 'get_supplier_variation'
+            })
+          })
+        }
+      }
+      
+      if (otdKPI) {
+        evidence.push({
+          metric: 'OTD Médio Fornecedores',
+          value: `${otdKPI.value}%`,
+          comparison: 'Meta: 90%',
+          source: 'get_kpis_overview'
+        })
+      }
     }
   }
 
@@ -544,6 +643,12 @@ export async function agentComercial(
   const recommendations: string[] = []
 
   const lowerQuestion = question.toLowerCase()
+  const isCustomersByRangeQuestion = lowerQuestion.includes('clientes por faixa') ||
+                                     lowerQuestion.includes('clientes por') ||
+                                     lowerQuestion.includes('faixa de faturamento') ||
+                                     lowerQuestion.includes('distribuição de clientes') ||
+                                     lowerQuestion.includes('distribuicao de clientes')
+  
   const isRevenueQuestion = lowerQuestion.includes('faturamento') ||
                             lowerQuestion.includes('receita') ||
                             lowerQuestion.includes('evolução') ||
@@ -563,8 +668,55 @@ export async function agentComercial(
                                 lowerQuestion.includes('sazão') ||
                                 lowerQuestion.includes('sazao')
 
+  // Se a pergunta é sobre clientes por faixa de faturamento
+  if (isCustomersByRangeQuestion) {
+    const customersData = await DataAdapter.get_customers_by_billing_range('dezembro')
+    
+    // Análise da distribuição
+    const totalCustomers = customersData.ranges.reduce((sum, r) => sum + r.customers, 0)
+    const totalRevenue = customersData.ranges.reduce((sum, r) => sum + r.revenue, 0)
+    
+    // Maior faixa por quantidade
+    const largestByQuantity = [...customersData.ranges].sort((a, b) => b.customers - a.customers)[0]
+    // Maior faixa por receita
+    const largestByRevenue = [...customersData.ranges].sort((a, b) => b.revenue - a.revenue)[0]
+    
+    findings.push(`Total de ${totalCustomers.toLocaleString('pt-BR')} clientes ativos`)
+    findings.push(`Faixa com mais clientes: ${largestByQuantity.range} (${largestByQuantity.customers} clientes, ${largestByQuantity.percentage}%)`)
+    findings.push(`Faixa com maior faturamento: ${largestByRevenue.range} (R$ ${(largestByRevenue.revenue / 1000).toFixed(0)}k, ${((largestByRevenue.revenue / totalRevenue) * 100).toFixed(1)}% do total)`)
+    
+    customersData.ranges.forEach(range => {
+      evidence.push({
+        metric: range.range,
+        value: `${range.customers} clientes`,
+        comparison: `${range.percentage}% da base | R$ ${(range.revenue / 1000).toFixed(0)}k`,
+        source: 'get_customers_by_billing_range'
+      })
+    })
+    
+    // Análise de concentração
+    const top3Revenue = customersData.ranges
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 3)
+    const top3RevenuePercent = (top3Revenue.reduce((sum, r) => sum + r.revenue, 0) / totalRevenue) * 100
+    
+    if (top3RevenuePercent > 60) {
+      findings.push(`Concentração alta: top 3 faixas representam ${top3RevenuePercent.toFixed(1)}% do faturamento`)
+      recommendations.push('Desenvolver estratégias para aumentar faturamento nas faixas menores')
+    }
+    
+    // Análise de distribuição
+    const midRanges = customersData.ranges.filter(r => 
+      r.range.includes('R$ 2k') || r.range.includes('R$ 5k') || r.range.includes('R$ 1k')
+    )
+    const midRangesPercent = midRanges.reduce((sum, r) => sum + r.percentage, 0)
+    
+    if (midRangesPercent > 50) {
+      findings.push(`Base bem distribuída: ${midRangesPercent.toFixed(1)}% dos clientes nas faixas intermediárias`)
+    }
+  }
   // Se a pergunta é sobre faturamento/receita, analisa receita mensal
-  if (isRevenueQuestion || isSeasonalityQuestion) {
+  else if (isRevenueQuestion || isSeasonalityQuestion) {
     const revenueData = await DataAdapter.get_revenue_monthly('dezembro')
     
     // Se a pergunta é especificamente sobre sazonalidade, prioriza análise sazonal
