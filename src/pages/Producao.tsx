@@ -25,11 +25,17 @@ import {
   Area,
   Legend
 } from 'recharts'
+import { useEffect, useState } from 'react'
+import { lazy, Suspense } from 'react'
 import PageHeader from '../components/PageHeader'
 import KPICard from '../components/KPICard'
 import ChartCard from '../components/ChartCard'
 import ProgressBar from '../components/ProgressBar'
 import Badge from '../components/Badge'
+import { useDeepLinkFilters, useHighlightKPI } from '../hooks/useDeepLinkFilters'
+
+// Lazy load para evitar quebrar se houver erro
+const InsightsPanel = lazy(() => import('../components/InsightsPanel').catch(() => ({ default: () => null })))
 import {
   producaoKPIs,
   produtividadeTurno,
@@ -42,6 +48,18 @@ import {
 const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e']
 
 const Producao = () => {
+  // Aplica filtros de deep links
+  const filters = useDeepLinkFilters()
+  const highlightedKpi = useHighlightKPI(filters.focusKpi)
+  
+  // Estado para linha selecionada (se vier do deep link)
+  const [selectedLine, setSelectedLine] = useState<string | undefined>(filters.line)
+  
+  useEffect(() => {
+    if (filters.line) {
+      setSelectedLine(filters.line)
+    }
+  }, [filters.line])
   const kpiIcons = [
     Factory,
     Gauge,
@@ -75,20 +93,28 @@ const Producao = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {producaoKPIs.map((kpi, index) => (
-          <KPICard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            unit={kpi.unit}
-            change={kpi.change}
-            trend={kpi.trend}
-            icon={kpiIcons[index]}
-            iconColor={kpiColors[index]}
-            variant={kpi.id === 'oee' ? 'highlight' : 'default'}
-            description={kpi.description}
-          />
-        ))}
+        {producaoKPIs.map((kpi, index) => {
+          const isHighlighted = highlightedKpi === kpi.id || highlightedKpi === kpi.id.replace('_', '-')
+          return (
+            <div
+              key={kpi.id}
+              id={`kpi-${kpi.id}`}
+              className={isHighlighted ? 'transition-all duration-300' : ''}
+            >
+              <KPICard
+                label={kpi.label}
+                value={kpi.value}
+                unit={kpi.unit}
+                change={kpi.change}
+                trend={kpi.trend}
+                icon={kpiIcons[index]}
+                iconColor={kpiColors[index]}
+                variant={isHighlighted || kpi.id === 'oee' ? 'highlight' : 'default'}
+                description={kpi.description}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* OEE Destaque */}

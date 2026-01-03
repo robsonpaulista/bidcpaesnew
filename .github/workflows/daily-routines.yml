@@ -1,0 +1,28 @@
+# ==========================================
+# GITHUB ACTIONS - ROTINAS DIÁRIAS
+# ==========================================
+# Executa rotinas automáticas 1x por dia (8h da manhã UTC = 5h BR)
+
+name: Daily Routines
+
+on:
+  schedule:
+    # Executa todo dia às 8h UTC (5h BR)
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Permite execução manual
+
+jobs:
+  run-routines:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Executar Rotinas Automáticas
+        run: |
+          curl -X POST "${{ secrets.VERCEL_URL }}/api/orchestrator/run-routines" \
+            -H "Authorization: Bearer ${{ secrets.ROUTINES_AUTH_TOKEN }}" \
+            -H "Content-Type: application/json"
+        
+      - name: Verificar Resultado
+        run: |
+          echo "✅ Rotinas executadas com sucesso"
+

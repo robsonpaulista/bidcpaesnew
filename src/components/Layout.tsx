@@ -1,6 +1,8 @@
 import { ReactNode, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import ChatWidget from './ChatWidget'
 
 interface LayoutProps {
   children: ReactNode
@@ -9,6 +11,10 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false)
+  const location = useLocation()
+  
+  // Pega pergunta inicial do state da navegação
+  const initialQuestion = location.state?.question as string | undefined
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-orange-50/30">
@@ -45,11 +51,15 @@ const Layout = ({ children }: LayoutProps) => {
           </div>
         </main>
       </div>
+
+      {/* Chat Widget - Disponível em todas as páginas */}
+      <ChatWidget initialQuestion={initialQuestion} />
     </div>
   )
 }
 
 export default Layout
+
 
 
 

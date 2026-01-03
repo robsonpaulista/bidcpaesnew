@@ -24,12 +24,18 @@ import {
   ComposedChart,
   Line
 } from 'recharts'
+import { useEffect, useState } from 'react'
+import { lazy, Suspense } from 'react'
 import PageHeader from '../components/PageHeader'
 import KPICard from '../components/KPICard'
 import ChartCard from '../components/ChartCard'
 import DataTable from '../components/DataTable'
 import Badge from '../components/Badge'
 import ProgressBar from '../components/ProgressBar'
+import { useDeepLinkFilters, useHighlightKPI } from '../hooks/useDeepLinkFilters'
+
+// Lazy load para evitar quebrar se houver erro
+const InsightsPanel = lazy(() => import('../components/InsightsPanel').catch(() => ({ default: () => null })))
 import {
   comercialKPIs,
   vendaPorRegiao,
@@ -41,6 +47,18 @@ import {
 } from '../services/mockData'
 
 const Comercial = () => {
+  // Aplica filtros de deep links
+  const filters = useDeepLinkFilters()
+  const highlightedKpi = useHighlightKPI(filters.focusKpi)
+  
+  // Estado para período selecionado (se vier do deep link)
+  const [selectedPeriod, setSelectedPeriod] = useState<string | undefined>(filters.period)
+  
+  useEffect(() => {
+    if (filters.period) {
+      setSelectedPeriod(filters.period)
+    }
+  }, [filters.period])
   const kpiIcons = [
     DollarSign,
     ShoppingBag,
@@ -149,20 +167,28 @@ const Comercial = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {comercialKPIs.map((kpi, index) => (
-          <KPICard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            unit={kpi.unit}
-            change={kpi.change}
-            trend={kpi.trend}
-            icon={kpiIcons[index]}
-            iconColor={kpiColors[index]}
-            variant={kpi.id === 'faturamento' ? 'highlight' : 'default'}
-            description={kpi.description}
-          />
-        ))}
+        {comercialKPIs.map((kpi, index) => {
+          const isHighlighted = highlightedKpi === kpi.id || highlightedKpi === kpi.id.replace('_', '-')
+          return (
+            <div
+              key={kpi.id}
+              id={`kpi-${kpi.id}`}
+              className={isHighlighted ? 'transition-all duration-300' : ''}
+            >
+              <KPICard
+                label={kpi.label}
+                value={kpi.value}
+                unit={kpi.unit}
+                change={kpi.change}
+                trend={kpi.trend}
+                icon={kpiIcons[index]}
+                iconColor={kpiColors[index]}
+                variant={isHighlighted || kpi.id === 'faturamento' ? 'highlight' : 'default'}
+                description={kpi.description}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* Charts Row 1 */}

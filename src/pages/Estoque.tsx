@@ -23,11 +23,13 @@ import {
   Line,
   Legend
 } from 'recharts'
+import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import KPICard from '../components/KPICard'
 import ChartCard from '../components/ChartCard'
 import DataTable from '../components/DataTable'
 import Badge from '../components/Badge'
+import { useDeepLinkFilters, useHighlightKPI } from '../hooks/useDeepLinkFilters'
 import {
   estoqueKPIs,
   giroEstoqueCategoria,
@@ -40,6 +42,9 @@ const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#22c55e']
 const AVARIA_COLORS = ['#ef4444', '#f97316', '#3b82f6', '#8b5cf6']
 
 const Estoque = () => {
+  // Aplica filtros de deep links
+  const filters = useDeepLinkFilters()
+  const highlightedKpi = useHighlightKPI(filters.focusKpi)
   const kpiIcons = [
     Package,
     RotateCw,
@@ -133,19 +138,28 @@ const Estoque = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-        {estoqueKPIs.map((kpi, index) => (
-          <KPICard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            unit={kpi.unit}
-            change={kpi.change}
-            trend={kpi.trend}
-            icon={kpiIcons[index]}
-            iconColor={kpiColors[index]}
-            description={kpi.description}
-          />
-        ))}
+        {estoqueKPIs.map((kpi, index) => {
+          const isHighlighted = highlightedKpi === kpi.id || highlightedKpi === kpi.id.replace('_', '-')
+          return (
+            <div
+              key={kpi.id}
+              id={`kpi-${kpi.id}`}
+              className={isHighlighted ? 'transition-all duration-300' : ''}
+            >
+              <KPICard
+                label={kpi.label}
+                value={kpi.value}
+                unit={kpi.unit}
+                change={kpi.change}
+                trend={kpi.trend}
+                icon={kpiIcons[index]}
+                iconColor={kpiColors[index]}
+                variant={isHighlighted || index === 0 ? 'highlight' : 'default'}
+                description={kpi.description}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* Acurácia Destaque */}

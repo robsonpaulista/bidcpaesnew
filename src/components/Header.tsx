@@ -1,4 +1,8 @@
-import { Menu, Bell, Search, User, Calendar } from 'lucide-react'
+import { Menu, Search, User, Calendar } from 'lucide-react'
+import { lazy, Suspense } from 'react'
+
+// Lazy load para evitar quebrar se houver erro
+const EventsFeed = lazy(() => import('./EventsFeed').catch(() => ({ default: () => null })))
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -44,11 +48,10 @@ const Header = ({ onMenuClick }: HeaderProps) => {
             <span className="text-sm capitalize">{today}</span>
           </div>
 
-          {/* Notifications */}
-          <button className="p-2 rounded-xl hover:bg-slate-100 transition-colors relative">
-            <Bell className="w-5 h-5 text-secondary-600" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary-500 rounded-full" />
-          </button>
+          {/* Feed de Eventos (Atividades dos Agentes) */}
+          <Suspense fallback={null}>
+            <EventsFeed />
+          </Suspense>
 
           {/* User */}
           <div className="flex items-center gap-3 pl-2 md:pl-4 border-l border-slate-200">
@@ -67,6 +70,7 @@ const Header = ({ onMenuClick }: HeaderProps) => {
 }
 
 export default Header
+
 
 
 
