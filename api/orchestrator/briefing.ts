@@ -122,7 +122,28 @@ export default async function handler(
       }
     }
 
-    res.status(200).json(briefing)
+    // Transforma snake_case do Supabase para camelCase esperado pela interface
+    // O Supabase retorna: top_alerts, top_cases, kpi_highlights
+    // A interface espera: topAlerts, topCases, kpiHighlights
+    const transformedBriefing = {
+      date: briefing.date,
+      summary: briefing.summary || '',
+      topAlerts: Array.isArray(briefing.top_alerts) ? briefing.top_alerts : (briefing.topAlerts || []),
+      topCases: Array.isArray(briefing.top_cases) ? briefing.top_cases : (briefing.topCases || []),
+      kpiHighlights: Array.isArray(briefing.kpi_highlights) ? briefing.kpi_highlights : (briefing.kpiHighlights || []),
+      recommendations: Array.isArray(briefing.recommendations) ? briefing.recommendations : []
+    }
+
+    console.log('✅ Briefing transformado:', {
+      date: transformedBriefing.date,
+      hasSummary: !!transformedBriefing.summary,
+      alertsCount: transformedBriefing.topAlerts.length,
+      casesCount: transformedBriefing.topCases.length,
+      highlightsCount: transformedBriefing.kpiHighlights.length,
+      recommendationsCount: transformedBriefing.recommendations.length
+    })
+
+    res.status(200).json(transformedBriefing)
   } catch (error) {
     console.error('❌ Erro ao buscar briefing:', error)
     
