@@ -25,17 +25,18 @@ interface SupabaseClient {
 // No frontend (Vite), usa import.meta.env
 // No backend (Node/serverless), usa process.env
 // Prioriza process.env em ambiente Node (serverless functions)
-const isNodeEnv = typeof process !== 'undefined' && process.env && typeof window === 'undefined'
+// Detecta ambiente Node: process existe E window não existe (serverless functions do Vercel)
+const isNodeEnv = typeof process !== 'undefined' && process.env && (typeof window === 'undefined' || typeof import.meta === 'undefined')
 const SUPABASE_URL = isNodeEnv 
-  ? (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)
-  : (import.meta.env?.VITE_SUPABASE_URL || (typeof process !== 'undefined' && process.env ? process.env.SUPABASE_URL : undefined))
+  ? (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || undefined)
+  : (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || undefined
 const SUPABASE_ANON_KEY = isNodeEnv
-  ? (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)
-  : (import.meta.env?.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' && process.env ? process.env.SUPABASE_ANON_KEY : undefined))
+  ? (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || undefined)
+  : (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || undefined
 const SUPABASE_SERVICE_ROLE_KEY = typeof process !== 'undefined' && process.env ? process.env.SUPABASE_SERVICE_ROLE_KEY : undefined
 
 // Log de debug (apenas em desenvolvimento ou se não configurado)
-const isDev = import.meta.env?.DEV || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development')
+const isDev = (typeof import.meta !== 'undefined' && import.meta.env?.DEV) || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development')
 const isMissingConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY
 
 if (isDev || isMissingConfig) {
