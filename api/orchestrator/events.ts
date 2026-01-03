@@ -3,8 +3,8 @@
 // ==========================================
 // Retorna feed de eventos (atividades dos agentes)
 
-// Import estático para evitar problemas com imports dinâmicos no Vercel
-import { supabaseFetch } from '../../src/services/supabase/client'
+// Import do helper dentro de api/ (serverless functions não incluem src/)
+import { supabaseFetch } from '../lib/supabase'
 
 interface VercelRequest {
   method?: string
