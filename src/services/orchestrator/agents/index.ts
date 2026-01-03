@@ -643,9 +643,17 @@ export async function agentComercial(
   const evidence: AgentResponse['evidence'] = []
   const recommendations: string[] = []
 
+  // SEMPRE busca KPIs da área comercial
+  const kpisData = await DataAdapter.get_kpis_overview('dezembro', 'comercial')
+  const allKPIs = kpisData.kpis || []
+  
+  // Mapeia perguntas para KPIs específicos
+  const mappedKPIs = mapQuestionToKPIs(question, 'comercial')
   const lowerQuestion = question.toLowerCase()
-  const isCustomersByRangeQuestion = lowerQuestion.includes('clientes por faixa') ||
-                                     lowerQuestion.includes('clientes por') ||
+  
+  // Casos especiais que não são KPIs diretos
+  const isCustomersByRangeQuestion = mappedKPIs.some(m => m.kpiId === 'clientes_faixa') ||
+                                     lowerQuestion.includes('clientes por faixa') ||
                                      lowerQuestion.includes('faixa de faturamento') ||
                                      lowerQuestion.includes('distribuição de clientes') ||
                                      lowerQuestion.includes('distribuicao de clientes')
