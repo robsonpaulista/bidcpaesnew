@@ -606,53 +606,6 @@ export async function agentEstoqueLogistica(
   
   // Analisa KPIs de estoque
   if (isEstoqueQuestion) {
-    // Analisa KPIs de estoque
-    const kpis = await DataAdapter.get_kpis_overview('dezembro', 'estoque')
-    
-    // Analisa acurácia
-    const acuraciaKPI = kpis.kpis.find(k => k.id === 'acuracia')
-    if (acuraciaKPI) {
-      if (acuraciaKPI.value < 98) {
-        findings.push(`Acurácia de estoque de ${acuraciaKPI.value}% abaixo da meta de 98%`)
-        evidence.push({
-          metric: 'Acurácia de Estoque',
-          value: `${acuraciaKPI.value}%`,
-          comparison: 'Meta: 98%',
-          source: 'get_kpis_overview'
-        })
-        recommendations.push('Realizar inventário físico e ajustar divergências')
-      } else {
-        findings.push(`Acurácia de estoque excelente: ${acuraciaKPI.value}%`)
-        evidence.push({
-          metric: 'Acurácia de Estoque',
-          value: `${acuraciaKPI.value}%`,
-          comparison: 'Meta: 98%',
-          source: 'get_kpis_overview'
-        })
-      }
-    }
-
-    // Analisa giro de estoque
-    const giroKPI = kpis.kpis.find(k => k.id === 'giro_estoque')
-    if (giroKPI && giroKPI.value > 15) {
-      findings.push(`Giro de estoque de ${giroKPI.value} dias acima do ideal`)
-      evidence.push({
-        metric: 'Giro de Estoque',
-        value: `${giroKPI.value} dias`,
-        comparison: 'Ideal: <15 dias',
-        source: 'get_kpis_overview'
-      })
-      recommendations.push('Otimizar giro de estoque')
-    }
-
-    // Analisa avarias
-    const avariasKPI = kpis.kpis.find(k => k.id === 'avarias')
-    if (avariasKPI && avariasKPI.value > 1) {
-      findings.push(`Avarias de ${avariasKPI.value}% acima do aceitável`)
-      recommendations.push('Revisar processos de manuseio e armazenamento')
-    }
-  }
-
     // Se mapeou para KPIs específicos de estoque, retorna esses KPIs
     if (mappedKPIs.length > 0) {
       for (const mapped of mappedKPIs) {
@@ -679,6 +632,25 @@ export async function agentEstoqueLogistica(
           source: 'get_kpis_overview'
         })
       }
+    }
+    
+    // Análises específicas baseadas em KPIs de estoque
+    const acuraciaKPI = allKPIs.find(k => k.id === 'acuracia')
+    if (acuraciaKPI && acuraciaKPI.value < 98 && !mappedKPIs.find(m => m.kpiId === 'acuracia')) {
+      findings.push(`Acurácia de estoque de ${acuraciaKPI.value}% abaixo da meta de 98%`)
+      recommendations.push('Realizar inventário físico e ajustar divergências')
+    }
+    
+    const giroKPI = allKPIs.find(k => k.id === 'giro_estoque')
+    if (giroKPI && giroKPI.value > 15 && !mappedKPIs.find(m => m.kpiId === 'giro_estoque')) {
+      findings.push(`Giro de estoque de ${giroKPI.value} dias acima do ideal`)
+      recommendations.push('Otimizar giro de estoque')
+    }
+    
+    const avariasKPI = allKPIs.find(k => k.id === 'avarias')
+    if (avariasKPI && avariasKPI.value > 1 && !mappedKPIs.find(m => m.kpiId === 'avarias')) {
+      findings.push(`Avarias de ${avariasKPI.value}% acima do aceitável`)
+      recommendations.push('Revisar processos de manuseio e armazenamento')
     }
   }
   
