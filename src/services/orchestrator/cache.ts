@@ -3,7 +3,7 @@
 // ==========================================
 // Em produção, use Upstash Redis para cache confiável em serverless
 
-import type { LLMMappingResult } from './llm-mapper'
+import type { LLMMappingResult } from './llm-mapper.js'
 
 interface CacheEntry {
   question: string
