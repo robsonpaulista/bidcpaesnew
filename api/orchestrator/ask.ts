@@ -73,9 +73,9 @@ export default async function handler(
       return
     }
 
-    // Importa orquestração dinamicamente (evita problemas de build)
-    // Em produção, o Vercel compila isso corretamente
-    const { orchestrate } = await import('../../src/services/orchestrator/maestro')
+    // Importa orquestração estaticamente
+    // O Vercel deve incluir os módulos de src/ quando compilados
+    const { orchestrate } = await import('../../src/services/orchestrator/maestro.js')
     
     // Executa orquestração (agora no backend, seguro)
     // A API key do Groq está em process.env.GROQ_API_KEY (não exposta)
