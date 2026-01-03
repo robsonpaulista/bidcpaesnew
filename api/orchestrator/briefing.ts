@@ -64,110 +64,39 @@ export default async function handler(
     // Pega data da query (ou usa hoje)
     const date = (typeof req.query?.date === 'string' ? req.query.date : null) || new Date().toISOString().split('T')[0]
 
-    // Busca briefing do Supabase (usando import estático)
-    let data: any = null
-    let error: any = null
-    
+    // SEMPRE gera briefing na hora usando dados mockados
+    // Isso garante que os resumos por área sempre apareçam, mesmo sem dados reais no Supabase
+    console.log('📋 Gerando briefing para data:', date)
     try {
-      console.log('📋 Buscando briefing para data:', date)
-      const result = await supabaseFetch('briefings', {
-        method: 'GET',
-        query: {
-          date: `eq.${date}`,
-          limit: '1',
-          order: 'date.desc'
-        },
-        useServiceRole: false
+      const briefingModule = await import('../../src/services/orchestrator/briefing')
+      const { generateBriefing } = briefingModule
+      const generated = await generateBriefing(date)
+      
+      console.log('✅ Briefing gerado:', {
+        date: generated.date,
+        hasSummary: !!generated.summary,
+        areasCount: generated.areaSummaries?.length || 0,
+        alertsCount: generated.topAlerts?.length || 0,
+        casesCount: generated.topCases?.length || 0,
+        highlightsCount: generated.kpiHighlights?.length || 0,
+        recommendationsCount: generated.recommendations?.length || 0
       })
       
-      data = result.data
-      error = result.error
-      
-      if (error) {
-        console.error('❌ Erro retornado por supabaseFetch:', {
-          error,
-          errorType: typeof error,
-          errorString: String(error)
-        })
-      }
-    } catch (fetchError) {
-      console.error('❌ Erro ao chamar supabaseFetch:', fetchError)
-      error = fetchError instanceof Error ? {
-        message: fetchError.message,
-        stack: fetchError.stack,
-        name: fetchError.name
-      } : { message: String(fetchError) }
+      res.status(200).json(generated)
+      return
+    } catch (genError) {
+      console.error('❌ Erro ao gerar briefing:', genError)
+      res.status(200).json({
+        date,
+        summary: 'Erro ao gerar briefing. Verifique os logs do servidor.',
+        areaSummaries: [],
+        topAlerts: [],
+        topCases: [],
+        kpiHighlights: [],
+        recommendations: []
+      })
+      return
     }
-
-    if (error) {
-      console.error('❌ Erro ao buscar briefing no Supabase:', error)
-      // Se erro, tenta gerar na hora (fallback)
-      try {
-        const briefingModule = await import('../../src/services/orchestrator/briefing')
-        const { generateBriefing } = briefingModule
-        const generated = await generateBriefing(date)
-        res.status(200).json(generated)
-        return
-      } catch (genError) {
-        console.error('❌ Erro ao gerar briefing (fallback):', genError)
-        res.status(200).json({
-          date,
-          summary: 'Briefing ainda não foi gerado. Configure as variáveis de ambiente do Supabase no Vercel.',
-          topAlerts: [],
-          topCases: [],
-          kpiHighlights: [],
-          recommendations: []
-        })
-        return
-      }
-    }
-
-    const briefing = Array.isArray(data) ? data[0] : (data || null)
-
-    if (!briefing || (typeof briefing === 'object' && !('date' in briefing))) {
-      // Se não existe, gera na hora (fallback)
-      try {
-        const briefingModule = await import('../../src/services/orchestrator/briefing')
-        const { generateBriefing } = briefingModule
-        const generated = await generateBriefing(date)
-        res.status(200).json(generated)
-        return
-      } catch (genError) {
-        console.error('❌ Erro ao gerar briefing (fallback):', genError)
-        res.status(200).json({
-          date,
-          summary: 'Briefing ainda não foi gerado.',
-          topAlerts: [],
-          topCases: [],
-          kpiHighlights: [],
-          recommendations: []
-        })
-        return
-      }
-    }
-
-    // Transforma snake_case do Supabase para camelCase esperado pela interface
-    // O Supabase retorna: top_alerts, top_cases, kpi_highlights
-    // A interface espera: topAlerts, topCases, kpiHighlights
-    const transformedBriefing = {
-      date: briefing.date,
-      summary: briefing.summary || '',
-      topAlerts: Array.isArray(briefing.top_alerts) ? briefing.top_alerts : (briefing.topAlerts || []),
-      topCases: Array.isArray(briefing.top_cases) ? briefing.top_cases : (briefing.topCases || []),
-      kpiHighlights: Array.isArray(briefing.kpi_highlights) ? briefing.kpi_highlights : (briefing.kpiHighlights || []),
-      recommendations: Array.isArray(briefing.recommendations) ? briefing.recommendations : []
-    }
-
-    console.log('✅ Briefing transformado:', {
-      date: transformedBriefing.date,
-      hasSummary: !!transformedBriefing.summary,
-      alertsCount: transformedBriefing.topAlerts.length,
-      casesCount: transformedBriefing.topCases.length,
-      highlightsCount: transformedBriefing.kpiHighlights.length,
-      recommendationsCount: transformedBriefing.recommendations.length
-    })
-
-    res.status(200).json(transformedBriefing)
   } catch (error) {
     console.error('❌ Erro ao buscar briefing:', error)
     
