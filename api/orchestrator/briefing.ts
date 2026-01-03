@@ -56,15 +56,26 @@ export default async function handler(
     // Busca briefing do Supabase
     const { supabaseFetch } = await import('../../src/services/supabase/client')
     
-    const { data, error } = await supabaseFetch('briefings', {
-      method: 'GET',
-      query: {
-        date: `eq.${date}`,
-        limit: '1',
-        order: 'date.desc'
-      },
-      useServiceRole: false
-    })
+    let data: any = null
+    let error: any = null
+    
+    try {
+      const result = await supabaseFetch('briefings', {
+        method: 'GET',
+        query: {
+          date: `eq.${date}`,
+          limit: '1',
+          order: 'date.desc'
+        },
+        useServiceRole: false
+      })
+      
+      data = result.data
+      error = result.error
+    } catch (fetchError) {
+      console.error('❌ Erro ao chamar supabaseFetch:', fetchError)
+      error = fetchError instanceof Error ? fetchError.message : 'Erro desconhecido'
+    }
 
     if (error) {
       console.error('❌ Erro ao buscar briefing no Supabase:', error)
@@ -88,7 +99,7 @@ export default async function handler(
       }
     }
 
-    const briefing = Array.isArray(data) ? data[0] : data
+    const briefing = Array.isArray(data) ? data[0] : (data || null)
 
     if (!briefing || (typeof briefing === 'object' && !('date' in briefing))) {
       // Se não existe, gera na hora (fallback)

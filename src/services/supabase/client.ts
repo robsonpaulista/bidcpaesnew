@@ -150,7 +150,18 @@ export async function supabaseFetch(
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: response.statusText }))
+      let error: any
+      try {
+        const errorText = await response.text()
+        try {
+          error = JSON.parse(errorText)
+        } catch {
+          error = { message: errorText || response.statusText, status: response.status }
+        }
+      } catch {
+        error = { message: response.statusText, status: response.status }
+      }
+      console.error(`❌ Supabase error (${response.status}) para ${table}:`, error)
       return { data: null, error }
     }
 

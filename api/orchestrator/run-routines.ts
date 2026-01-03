@@ -39,20 +39,22 @@ export default async function handler(
   }
 
   // Verifica token de autorização (proteção básica)
-  // Permite execução sem token apenas em desenvolvimento ou se não estiver configurado
+  // Permite execução sem token apenas se não estiver configurado (para facilitar uso do frontend)
   const authToken = req.headers?.['authorization'] || req.query?.token
   const expectedToken = process.env.ROUTINES_AUTH_TOKEN
 
-  // Em desenvolvimento, permite execução sem token se não estiver configurado
-  const isDev = process.env.NODE_ENV === 'development' || !process.env.VERCEL
-  
-  if (expectedToken && !isDev) {
+  // Se o token estiver configurado, exige autenticação
+  // Caso contrário, permite execução (útil para desenvolvimento e uso do frontend)
+  if (expectedToken) {
     const token = typeof authToken === 'string' 
       ? authToken.replace('Bearer ', '')
-      : authToken
+      : (typeof authToken === 'string' ? authToken : null)
     
-    if (token !== expectedToken) {
-      res.status(401).json({ error: 'Unauthorized' })
+    if (!token || token !== expectedToken) {
+      res.status(401).json({ 
+        error: 'Unauthorized',
+        message: 'Token de autorização necessário. Configure ROUTINES_AUTH_TOKEN no Vercel ou envie via header Authorization ou query ?token=...'
+      })
       return
     }
   }
