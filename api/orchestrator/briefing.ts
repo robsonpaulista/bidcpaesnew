@@ -68,8 +68,7 @@ export default async function handler(
     // Isso garante que os resumos por área sempre apareçam, mesmo sem dados reais no Supabase
     console.log('📋 Gerando briefing para data:', date)
     try {
-      const briefingModule = await import('../../src/services/orchestrator/briefing')
-      const { generateBriefing } = briefingModule
+      const { generateBriefing } = await import('../lib/briefing.js')
       const generated = await generateBriefing(date)
       
       console.log('✅ Briefing gerado:', {
