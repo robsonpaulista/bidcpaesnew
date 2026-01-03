@@ -46,7 +46,7 @@ export default async function handler(
     // ==========================================
     // RATE LIMITING (CRÍTICO PARA PRODUÇÃO)
     // ==========================================
-    const { checkRateLimit, getRateLimitIdentifier } = await import('../../src/services/orchestrator/rate-limit')
+    const { checkRateLimit, getRateLimitIdentifier } = await import('../lib/rate-limit.js')
     
     const identifier = getRateLimitIdentifier(req)
     const rateLimitResult = await checkRateLimit(identifier, 30, 60) // 30 req/min
