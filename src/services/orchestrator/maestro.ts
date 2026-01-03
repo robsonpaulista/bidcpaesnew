@@ -665,7 +665,7 @@ export async function orchestrate(request: AskRequest): Promise<OrchestratorResp
     }
     
     // 1.1. NORMALIZAÇÃO E SANITIZAÇÃO DE ENTIDADES (CRÍTICO)
-    const { normalizeEntities } = await import('./entity-normalizer')
+    const { normalizeEntities } = await import('./entity-normalizer.js')
     const normalizationResult = normalizeEntities(mappingResult.entities)
     
     // Aplica penalidade de confiança se entidades inválidas
