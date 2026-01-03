@@ -4,7 +4,8 @@
 // Retorna briefing do dia (ou data específica)
 
 // Import do helper dentro de api/ (serverless functions não incluem src/)
-import { supabaseFetch } from '../lib/supabase'
+// Em módulos ES, precisa da extensão .js (mesmo que o arquivo seja .ts)
+import { supabaseFetch } from '../lib/supabase.js'
 
 interface VercelRequest {
   method?: string
