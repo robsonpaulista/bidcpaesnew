@@ -84,9 +84,7 @@ export default async function handler(
     const { detectDeviations } = await import('../../src/services/orchestrator/alerts')
     const alerts = await detectDeviations()
 
-    // 2. SALVA ALERTAS NO SUPABASE
-    const { supabaseFetch } = await import('../../src/services/supabase/client')
-    
+    // 2. SALVA ALERTAS NO SUPABASE (usando import estático)
     const savedAlerts = []
     for (const alert of alerts) {
       const { data, error } = await supabaseFetch('alerts', {
