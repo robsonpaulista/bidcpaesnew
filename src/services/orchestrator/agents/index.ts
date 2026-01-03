@@ -888,11 +888,39 @@ export async function agentComercial(
     }
   }
 
-  // KPIs comerciais - usa unit do contexto se disponível
-  const unit = (context?.unit as string | undefined) || 'comercial'
-  const kpis = await DataAdapter.get_kpis_overview('dezembro', unit)
-  const churnKPI = kpis.kpis.find(k => k.id === 'churn')
-  if (churnKPI && churnKPI.value > 3) {
+  // Se mapeou para KPIs específicos (exceto casos especiais), retorna esses KPIs
+  if (mappedKPIs.length > 0 && !isCustomersByRangeQuestion) {
+    for (const mapped of mappedKPIs) {
+      const kpi = allKPIs.find(k => k.id === mapped.kpiId)
+      if (kpi) {
+        findings.push(`${mapped.kpiLabel}: ${kpi.value}${kpi.unit || ''}`)
+        evidence.push({
+          metric: mapped.kpiLabel,
+          value: `${kpi.value}${kpi.unit || ''}`,
+          comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+          source: 'get_kpis_overview'
+        })
+      }
+    }
+  }
+  
+  // Se não mapeou para KPIs específicos e não é caso especial, retorna KPIs principais
+  if (mappedKPIs.length === 0 && !isCustomersByRangeQuestion && !isRevenueQuestion && !isSeasonalityQuestion && findings.length === 0) {
+    const mainKPIs = allKPIs.slice(0, 3) // Primeiros 3 KPIs
+    for (const kpi of mainKPIs) {
+      findings.push(`${kpi.label}: ${kpi.value}${kpi.unit || ''}`)
+      evidence.push({
+        metric: kpi.label,
+        value: `${kpi.value}${kpi.unit || ''}`,
+        comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
+        source: 'get_kpis_overview'
+      })
+    }
+  }
+  
+  // Análises específicas baseadas em KPIs
+  const churnKPI = allKPIs.find(k => k.id === 'churn')
+  if (churnKPI && churnKPI.value > 3 && !mappedKPIs.find(m => m.kpiId === 'churn')) {
     findings.push(`Churn rate de ${churnKPI.value}% acima do aceitável`)
     recommendations.push('Implementar ações de retenção de clientes')
   }
