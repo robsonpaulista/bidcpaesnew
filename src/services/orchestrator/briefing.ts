@@ -324,15 +324,20 @@ function generateExecutiveSummaryEnhanced(
   // Análise por área
   const criticalAreas = areaSummaries.filter(a => a.status === 'critical')
   const attentionAreas = areaSummaries.filter(a => a.status === 'attention')
+  const okAreas = areaSummaries.filter(a => a.status === 'ok')
   
   // Análise de metas
   const areasWithGoals = areaSummaries.filter(a => a.goalProgress !== null)
   const areasAboveGoal = areasWithGoals.filter(a => (a.goalProgress || 0) >= 100)
   const areasBelowGoal = areasWithGoals.filter(a => (a.goalProgress || 0) < 95)
+  const areasOnTrack = areasWithGoals.filter(a => {
+    const progress = a.goalProgress || 0
+    return progress >= 95 && progress < 100
+  })
   
   const parts: string[] = []
   
-  // Resumo operacional
+  // Resumo operacional - sempre mostra algo útil
   if (criticalAlerts > 0) {
     parts.push(`${criticalAlerts} alerta${criticalAlerts > 1 ? 's' : ''} crítico${criticalAlerts > 1 ? 's' : ''} (P0)`)
   }
@@ -345,7 +350,7 @@ function generateExecutiveSummaryEnhanced(
     parts.push(`${openCases} caso${openCases > 1 ? 's' : ''} em investigação`)
   }
   
-  // Resumo por área
+  // Resumo por área - prioridade para áreas críticas/atenção
   if (criticalAreas.length > 0) {
     const areasList = criticalAreas.map(a => a.areaLabel).join(', ')
     parts.push(`${criticalAreas.length} área${criticalAreas.length > 1 ? 's' : ''} crítica${criticalAreas.length > 1 ? 's' : ''}: ${areasList}`)
@@ -355,13 +360,28 @@ function generateExecutiveSummaryEnhanced(
     parts.push(`${attentionAreas.length} área${attentionAreas.length > 1 ? 's' : ''} requerendo atenção`)
   }
   
-  // Resumo de metas
+  // Resumo de metas - sempre mostra quando há áreas com metas
   if (areasAboveGoal.length > 0) {
-    parts.push(`${areasAboveGoal.length} área${areasAboveGoal.length > 1 ? 's' : ''} com meta superada`)
+    const areasList = areasAboveGoal.map(a => a.areaLabel).join(', ')
+    parts.push(`${areasAboveGoal.length} área${areasAboveGoal.length > 1 ? 's' : ''} com meta superada: ${areasList}`)
+  }
+  
+  if (areasOnTrack.length > 0 && areasAboveGoal.length === 0) {
+    parts.push(`${areasOnTrack.length} área${areasOnTrack.length > 1 ? 's' : ''} no caminho para atingir a meta`)
   }
   
   if (areasBelowGoal.length > 0) {
-    parts.push(`${areasBelowGoal.length} área${areasBelowGoal.length > 1 ? 's' : ''} abaixo da meta`)
+    const areasList = areasBelowGoal.map(a => a.areaLabel).join(', ')
+    parts.push(`${areasBelowGoal.length} área${areasBelowGoal.length > 1 ? 's' : ''} abaixo da meta: ${areasList}`)
+  }
+  
+  // Se não há alertas/casos críticos, mostra status geral
+  if (parts.length === 0 && areaSummaries.length > 0) {
+    if (okAreas.length === areaSummaries.length) {
+      return `Operação estável em todas as áreas. Todas as ${areaSummaries.length} áreas operando dentro dos parâmetros esperados. ${areasWithGoals.length > 0 ? `${areasOnTrack.length + areasAboveGoal.length} área(s) no caminho ou superando metas.` : ''}`
+    } else {
+      return `Operação em andamento. ${okAreas.length} área(s) operando normalmente. ${attentionAreas.length > 0 ? `${attentionAreas.length} área(s) requerendo atenção.` : ''}`
+    }
   }
   
   if (parts.length === 0) {
