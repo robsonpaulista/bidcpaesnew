@@ -654,7 +654,7 @@ export async function orchestrate(request: AskRequest): Promise<OrchestratorResp
     const mappingResult = await mapQuestionToIntentionWithLLM(request.question, context)
     
     // Log de debug (apenas em desenvolvimento)
-    const isDev = import.meta.env?.DEV || process.env.NODE_ENV === 'development'
+    const isDev = (typeof import.meta !== 'undefined' && import.meta.env?.DEV) || process.env.NODE_ENV === 'development'
     if (isDev) {
       console.log('🎯 Intenção mapeada:', {
         intent: mappingResult.intent,

@@ -116,7 +116,7 @@ async function mapWithGroq(question: string): Promise<LLMMappingResult> {
       ? 'GROQ_API_KEY ou LLM_API_KEY no Vercel Environment Variables'
       : 'Esta função deve rodar no backend. Chame /api/orchestrator/ask'
     
-    if (import.meta.env?.DEV || process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development') {
       console.error('❌ Groq API key não configurada')
       console.log(`💡 Configure ${envHint}`)
     }
@@ -124,7 +124,7 @@ async function mapWithGroq(question: string): Promise<LLMMappingResult> {
   }
 
   // Log da requisição (apenas em dev, sem expor a key)
-  const isDev = import.meta.env?.DEV || process.env.NODE_ENV === 'development'
+  const isDev = process.env.NODE_ENV === 'development'
   if (isDev) {
     console.log('🌐 Enviando requisição para Groq API...', {
       model: config.model,
@@ -384,7 +384,7 @@ export async function mapQuestionToIntentionWithLLM(
   context?: Record<string, unknown>
 ): Promise<LLMMappingResult> {
   // Log de debug (apenas em desenvolvimento)
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV === 'development') {
     console.log('🔍 Mapeando pergunta com LLM:', {
       provider: config.provider,
       hasApiKey: !!config.apiKey,
@@ -395,7 +395,7 @@ export async function mapQuestionToIntentionWithLLM(
   // Verifica cache primeiro (Redis ou memória)
   const cached = await getCachedMapping(question, context)
   if (cached) {
-    if (import.meta.env?.DEV || process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development') {
       console.log('💾 Cache hit:', question.substring(0, 50))
     }
     return cached
@@ -403,7 +403,7 @@ export async function mapQuestionToIntentionWithLLM(
 
   // Se não há API key ou provider é 'local', usa fallback
   if (!config.apiKey || config.provider === 'local') {
-    if (import.meta.env.DEV) {
+    if (process.env.NODE_ENV === 'development') {
       console.log('⚠️ Usando fallback (keywords) - LLM não configurado')
     }
     const result = mapWithKeywords(question, context)
@@ -417,11 +417,11 @@ export async function mapQuestionToIntentionWithLLM(
 
     switch (config.provider) {
       case 'groq':
-        if (import.meta.env.DEV) {
+        if (process.env.NODE_ENV === 'development') {
           console.log('🚀 Usando Groq para mapeamento...')
         }
         result = await mapWithGroq(question)
-        if (import.meta.env.DEV) {
+        if (process.env.NODE_ENV === 'development') {
           console.log('✅ Groq mapeou:', {
             intent: result.intent,
             confidence: result.confidence,
@@ -430,13 +430,13 @@ export async function mapQuestionToIntentionWithLLM(
         }
         break
       case 'gemini':
-        if (import.meta.env.DEV) {
+        if (process.env.NODE_ENV === 'development') {
           console.log('🚀 Usando Gemini para mapeamento...')
         }
         result = await mapWithGemini(question)
         break
       default:
-        if (import.meta.env.DEV) {
+        if (process.env.NODE_ENV === 'development') {
           console.log('⚠️ Provider não suportado, usando fallback')
         }
         return mapWithKeywords(question, context)
