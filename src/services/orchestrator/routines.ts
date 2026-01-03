@@ -105,7 +105,7 @@ export async function runRoutinesLocal(): Promise<{
 
     const existing = Array.isArray(existingBriefing) ? existingBriefing[0] : existingBriefing
     const briefingMethod = existing ? 'PATCH' : 'POST'
-    const briefingQuery = existing ? { date: `eq.${today}` } : {}
+    const briefingQuery: Record<string, string> | undefined = existing ? { date: `eq.${today}` } : undefined
 
     const { data: briefingData, error: briefingError } = await supabaseFetch('briefings', {
       method: briefingMethod,
