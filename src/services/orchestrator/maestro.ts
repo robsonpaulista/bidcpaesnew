@@ -8,7 +8,7 @@ import {
   AskRequest,
   AgentType
 } from './types'
-import { agents } from './agents'
+import { agents } from './agents/index.js'
 import {
   mapQuestionToIntention,
   getInvestigationPlan,
