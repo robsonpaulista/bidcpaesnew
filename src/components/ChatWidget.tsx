@@ -68,7 +68,7 @@ const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
             console.error('❌ Erro no teste:', result.testResult.error)
           }
         } else if (!result.configured) {
-          console.log('💡 Configure VITE_LLM_PROVIDER e VITE_LLM_API_KEY no .env para usar LLM')
+          console.log('💡 LLM funciona via backend (/api/orchestrator/ask). Configure GROQ_API_KEY no Vercel Dashboard.')
         }
         console.groupEnd()
       })

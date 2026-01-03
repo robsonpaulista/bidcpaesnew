@@ -90,11 +90,8 @@ export function logLLMConfig(): void {
   console.log('Model:', llmConfig.model || 'padrão')
   console.log('Status:', (llmConfig.provider !== 'local' && apiKey) ? '✅ Configurado e pronto' : '⚠️ Usando fallback (keywords)')
   console.log('Variáveis de ambiente carregadas:')
-  console.log('  VITE_LLM_PROVIDER:', import.meta.env.VITE_LLM_PROVIDER || '(não definida)')
-  console.log('  VITE_LLM_API_KEY:', import.meta.env.VITE_LLM_API_KEY 
-    ? `***${import.meta.env.VITE_LLM_API_KEY.slice(-4)} (${import.meta.env.VITE_LLM_API_KEY.length} chars)` 
-    : '(não definida)')
-  console.log('  VITE_LLM_MODEL:', import.meta.env.VITE_LLM_MODEL || '(não definida, usando padrão)')
+  console.log('  ⚠️ LLM roda no backend (seguro). Frontend não precisa de chaves.')
+  console.log('  💡 Configure GROQ_API_KEY no Vercel Dashboard (não use VITE_ prefixo!)')
   console.groupEnd()
 }
 
