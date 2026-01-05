@@ -122,6 +122,24 @@ const KPI_KEYWORDS: Record<string, Array<{ keywords: string[], weight: number }>
     { keywords: ['turno 1', 'turno 2', 'turno 3', 'primeiro turno', 'segundo turno', 'terceiro turno'], weight: KEYWORD_WEIGHTS.primary },
     { keywords: ['produtividade', 'volume produzido', 'kg produzido'], weight: KEYWORD_WEIGHTS.secondary },
     { keywords: ['produção', 'producao'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  temperatura_forno: [
+    { keywords: ['temperatura forno', 'temperatura do forno'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['temperatura', 'forno'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['calor', 'aquecimento'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao', 'qualidade'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  ph_massa: [
+    { keywords: ['ph massa', 'ph da massa', 'ph', 'ph da producao'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['acidez', 'alcalinidade'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['massa', 'preparação', 'preparacao'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao', 'qualidade'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  umidade: [
+    { keywords: ['umidade'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['umidade relativa', 'umidade do ar', 'umidade ambiente'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['hidratação', 'seco', 'úmido', 'umido'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao', 'qualidade', 'ambiente'], weight: KEYWORD_WEIGHTS.context }
   ]
 }
 

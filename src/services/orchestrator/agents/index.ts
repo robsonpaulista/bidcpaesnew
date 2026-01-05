@@ -1500,7 +1500,7 @@ export async function agentProducao(
     
     if (altKpiIds.length === 0) {
       // KPIs de Produção disponíveis
-      altKpiIds = ['oee', 'disponibilidade', 'performance', 'qualidade', 'rendimento', 'perdas_processo', 'producao_total', 'mtbf', 'mttr', 'produtividade_turno']
+      altKpiIds = ['oee', 'disponibilidade', 'performance', 'qualidade', 'rendimento', 'perdas_processo', 'producao_total', 'mtbf', 'mttr', 'produtividade_turno', 'temperatura_forno', 'ph_massa', 'umidade']
     }
     
     const clarification = generateClarificationMessage(altKpiIds, question)
@@ -1699,18 +1699,25 @@ export async function agentProducao(
   
   // Análise específica: MTTR
   if (selection.kpiId === 'mttr') {
-    // MTTR não está no pageContext ainda, mas podemos buscar do mockData ou usar valor fixo
-    // Por enquanto, vamos informar que não temos dados
-    const mttrValue = 2.5 // Valor fixo da página (em horas)
+    // Busca MTTR do contexto (agora está no pageContext)
+    const mttrKPI = pageContext?.kpis.find(k => k.id === 'mttr')
+    const mttrValue = mttrKPI && typeof mttrKPI.value === 'number' ? mttrKPI.value : 2.5 // Fallback
     const mttrLabel = getKPILabel('producao', 'mttr')
     
     findings.push(`${mttrLabel}: ${formatNumber(mttrValue, 1)} horas`)
     findings.push(`Tempo médio necessário para reparar equipamentos após uma falha.`)
     
+    if (mttrKPI?.change !== undefined && mttrKPI.change !== 0) {
+      const changeText = mttrKPI.change > 0 ? `+${formatNumber(mttrKPI.change, 1)}%` : `${formatNumber(mttrKPI.change, 1)}%`
+      findings.push(`Variação: ${changeText} vs período anterior.`)
+    }
+    
     evidence.push({
       metric: mttrLabel,
       value: `${formatNumber(mttrValue, 1)} horas`,
-      comparison: 'Menor tempo = melhor eficiência de manutenção',
+      comparison: mttrKPI?.change !== undefined && mttrKPI.change !== 0
+        ? `Variação: ${mttrKPI.change > 0 ? '+' : ''}${formatNumber(mttrKPI.change, 1)}%`
+        : 'Menor tempo = melhor eficiência de manutenção',
       source: 'page_context'
     })
     
@@ -1727,6 +1734,58 @@ export async function agentProducao(
     
     if (mttrValue > 3) {
       recommendations.push('MTTR acima de 3 horas. Revisar processos de manutenção para reduzir tempo de reparo.')
+    }
+  }
+  
+  // Análise específica: Indicadores de Qualidade
+  if (selection.kpiId === 'temperatura_forno' && pageContext?.qualidadeProducao) {
+    const temp = pageContext.qualidadeProducao.temperatura_forno
+    findings.push(`Temperatura do Forno: ${formatNumber(temp.min, 0)}-${formatNumber(temp.max, 0)}${temp.unidade}`)
+    findings.push(`Conformidade: ${formatNumber(temp.conformidade, 1)}%`)
+    
+    evidence.push({
+      metric: 'Temperatura Forno',
+      value: `${formatNumber(temp.min, 0)}-${formatNumber(temp.max, 0)}${temp.unidade}`,
+      comparison: `Conformidade: ${formatNumber(temp.conformidade, 1)}%`,
+      source: 'page_context'
+    })
+    
+    if (temp.conformidade < 95) {
+      recommendations.push('Conformidade de temperatura abaixo de 95%. Revisar calibração e controle do forno.')
+    }
+  }
+  
+  if (selection.kpiId === 'ph_massa' && pageContext?.qualidadeProducao) {
+    const ph = pageContext.qualidadeProducao.ph_massa
+    findings.push(`pH da Massa: ${formatNumber(ph.min, 1)} - ${formatNumber(ph.max, 1)}`)
+    findings.push(`Conformidade: ${formatNumber(ph.conformidade, 1)}%`)
+    
+    evidence.push({
+      metric: 'pH da Massa',
+      value: `${formatNumber(ph.min, 1)} - ${formatNumber(ph.max, 1)}`,
+      comparison: `Conformidade: ${formatNumber(ph.conformidade, 1)}%`,
+      source: 'page_context'
+    })
+    
+    if (ph.conformidade < 95) {
+      recommendations.push('Conformidade de pH abaixo de 95%. Revisar processo de preparação da massa.')
+    }
+  }
+  
+  if (selection.kpiId === 'umidade' && pageContext?.qualidadeProducao) {
+    const umidade = pageContext.qualidadeProducao.umidade
+    findings.push(`Umidade: ${formatNumber(umidade.min, 0)}-${formatNumber(umidade.max, 0)}${umidade.unidade}`)
+    findings.push(`Conformidade: ${formatNumber(umidade.conformidade, 1)}%`)
+    
+    evidence.push({
+      metric: 'Umidade',
+      value: `${formatNumber(umidade.min, 0)}-${formatNumber(umidade.max, 0)}${umidade.unidade}`,
+      comparison: `Conformidade: ${formatNumber(umidade.conformidade, 1)}%`,
+      source: 'page_context'
+    })
+    
+    if (umidade.conformidade < 95) {
+      recommendations.push('Conformidade de umidade abaixo de 95%. Revisar controle de ambiente e armazenamento.')
     }
   }
   

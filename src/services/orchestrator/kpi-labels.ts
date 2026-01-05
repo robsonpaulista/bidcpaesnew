@@ -31,7 +31,10 @@ export const KPI_LABELS: Record<string, Record<string, string>> = {
     'mtbf': 'MTBF',
     'mttr': 'MTTR',
     'produtividade_turno': 'Produtividade por Turno',
-    'produtividade_turnos': 'Produtividade por Turno'
+    'produtividade_turnos': 'Produtividade por Turno',
+    'temperatura_forno': 'Temperatura do Forno',
+    'ph_massa': 'pH da Massa',
+    'umidade': 'Umidade'
   }
 }
 

@@ -5,7 +5,8 @@
 
 import { 
   comprasKPIs, custoMateriasPrimas, performanceFornecedores, evolucaoPrecos,
-  producaoKPIs, oeeHistorico, rendimentoPorLinha, produtividadeTurno, perdasProducao
+  producaoKPIs, oeeHistorico, rendimentoPorLinha, produtividadeTurno, perdasProducao,
+  qualidadeProducao
 } from '../mockData.js'
 
 export interface PageContext {
@@ -62,6 +63,25 @@ export interface PageContext {
     value: number
     kg: number
   }>
+  qualidadeProducao?: {
+    temperatura_forno: {
+      min: number
+      max: number
+      unidade: string
+      conformidade: number
+    }
+    ph_massa: {
+      min: number
+      max: number
+      conformidade: number
+    }
+    umidade: {
+      min: number
+      max: number
+      unidade: string
+      conformidade: number
+    }
+  }
 }
 
 export function getPageContext(page: string, periodo?: string): PageContext | null {
@@ -154,12 +174,34 @@ export function getPageContext(page: string, periodo?: string): PageContext | nu
       kg: typeof perda.kg === 'number' ? perda.kg : 0
     }))
 
+    // Indicadores de Qualidade
+    const qualidadeProducaoData = {
+      temperatura_forno: {
+        min: qualidadeProducao.temperatura_forno.min,
+        max: qualidadeProducao.temperatura_forno.max,
+        unidade: qualidadeProducao.temperatura_forno.unidade,
+        conformidade: qualidadeProducao.temperatura_forno.conformidade
+      },
+      ph_massa: {
+        min: qualidadeProducao.ph_massa.min,
+        max: qualidadeProducao.ph_massa.max,
+        conformidade: qualidadeProducao.ph_massa.conformidade
+      },
+      umidade: {
+        min: qualidadeProducao.umidade.min,
+        max: qualidadeProducao.umidade.max,
+        unidade: qualidadeProducao.umidade.unidade,
+        conformidade: qualidadeProducao.umidade.conformidade
+      }
+    }
+
     return {
       kpis,
       serieOEE,
       rendimentoLinhas,
       produtividadeTurnos,
-      perdasProducao: perdasProducaoData
+      perdasProducao: perdasProducaoData,
+      qualidadeProducao: qualidadeProducaoData
     }
   }
 

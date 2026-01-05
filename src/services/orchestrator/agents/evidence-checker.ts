@@ -170,6 +170,7 @@ export function checkEvidenceForKPI(
     case 'perdas_processo':
     case 'producao_total':
     case 'mtbf':
+    case 'mttr':
       // Para KPIs de Produção, verifica se existe no contexto
       const producaoKpi = pageContext.kpis.find(k => k.id === kpiId)
       if (producaoKpi && producaoKpi.value !== undefined && producaoKpi.value !== null) {
@@ -182,6 +183,23 @@ export function checkEvidenceForKPI(
       return {
         hasMinimumEvidence: false,
         missingFields: [`${kpiId}_value`],
+        availableFields: []
+      }
+    
+    // Indicadores de qualidade (temperatura, pH, umidade)
+    case 'temperatura_forno':
+    case 'ph_massa':
+    case 'umidade':
+      if (pageContext.qualidadeProducao) {
+        return {
+          hasMinimumEvidence: true,
+          missingFields: [],
+          availableFields: [`${kpiId}_data`]
+        }
+      }
+      return {
+        hasMinimumEvidence: false,
+        missingFields: [`${kpiId}_data`],
         availableFields: []
       }
 

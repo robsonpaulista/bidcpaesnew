@@ -122,7 +122,49 @@ export const producaoKPIs: KPI[] = [
   { id: 'rendimento', label: 'Rendimento Médio', value: 97.2, unit: '%', change: 0.8, trend: 'up', description: 'Aproveitamento da matéria-prima' },
   { id: 'perdas_processo', label: 'Perdas Processo', value: 2650, unit: 'kg', change: -320, trend: 'up', description: 'Refugos e retrabalhos' },
   { id: 'mtbf', label: 'MTBF', value: 48, unit: 'h', change: 6, trend: 'up', description: 'Tempo médio entre falhas' },
+  { id: 'mttr', label: 'MTTR', value: 2.5, unit: 'h', change: -0.3, trend: 'up', description: 'Tempo médio de reparo' },
 ]
+
+// Indicadores de qualidade de produção
+export interface QualidadeProducao {
+  temperatura_forno: {
+    min: number
+    max: number
+    unidade: string
+    conformidade: number
+  }
+  ph_massa: {
+    min: number
+    max: number
+    conformidade: number
+  }
+  umidade: {
+    min: number
+    max: number
+    unidade: string
+    conformidade: number
+  }
+}
+
+export const qualidadeProducao: QualidadeProducao = {
+  temperatura_forno: {
+    min: 180,
+    max: 220,
+    unidade: '°C',
+    conformidade: 98.5
+  },
+  ph_massa: {
+    min: 5.2,
+    max: 5.8,
+    conformidade: 100
+  },
+  umidade: {
+    min: 38,
+    max: 42,
+    unidade: '%',
+    conformidade: 97.2
+  }
+}
 
 export const produtividadeTurno: ChartData[] = [
   { name: 'Turno 1 (6h-14h)', valor: 52840, meta: 50000, eficiencia: 105.7 },

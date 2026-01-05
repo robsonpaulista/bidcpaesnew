@@ -1,141 +1,450 @@
-# 📊 Relatório de Mapeamento - Página de Produção
+# 📊 Relatório de Mapeamento: Indicadores da Página de Produção
 
-## ✅ Comparação: KPIs da Página vs Mapeamento no Agente
-
-### 1. KPIs Principais (Cards)
-
-| # | KPI na Página | ID | Mapeado em `kpi-scorer.ts`? | Label em `kpi-labels.ts`? | Status |
-|---|---------------|----|------------------------------|---------------------------|--------|
-| 1 | **Produção Total** | `producao_total` | ✅ SIM | ✅ SIM | ✅ OK |
-| 2 | **OEE** | `oee` | ✅ SIM | ✅ SIM | ✅ OK |
-| 3 | **Disponibilidade** | `disponibilidade` | ✅ SIM | ✅ SIM | ✅ OK |
-| 4 | **Performance** | `performance` | ✅ SIM | ✅ SIM | ✅ OK |
-| 5 | **Qualidade** | `qualidade` | ✅ SIM | ✅ SIM | ✅ OK |
-| 6 | **Rendimento Médio** | `rendimento` | ✅ SIM | ✅ SIM | ✅ OK |
-| 7 | **Perdas Processo** | `perdas_processo` | ✅ SIM | ✅ SIM | ✅ OK |
-| 8 | **MTBF** | `mtbf` | ✅ SIM | ✅ SIM | ✅ OK |
-
-**Resultado**: ✅ **8/8 KPIs principais mapeados**
+## 🎯 Objetivo
+Mapear todos os indicadores, KPIs, gráficos e tabelas da página de Produção e comparar com:
+1. O que o agente tem mapeado
+2. O que foi repassado ao chat (contexto)
 
 ---
 
-### 2. Indicadores Adicionais (Cards Especiais)
+## 📋 1. INDICADORES NA PÁGINA DE PRODUÇÃO
 
-| # | Indicador na Página | ID Sugerido | Mapeado? | Status |
-|---|---------------------|-------------|----------|--------|
-| 1 | **MTTR** (Tempo médio de reparo) | `mttr` | ❌ NÃO | ⚠️ **FALTANDO** |
-| 2 | **Temperatura Forno** | `temperatura_forno` | ❌ NÃO | ⚠️ **FALTANDO** |
-| 3 | **pH da Massa** | `ph_massa` | ❌ NÃO | ⚠️ **FALTANDO** |
-| 4 | **Umidade** | `umidade` | ❌ NÃO | ⚠️ **FALTANDO** |
+### 1.1. KPIs Cards (8 indicadores principais)
 
-**Resultado**: ⚠️ **0/4 indicadores adicionais mapeados**
+| # | ID | Label | Valor | Unidade | Descrição | Fonte |
+|---|----|----|----|----|----|----|
+| 1 | `producao_total` | Produção Total | 145.820 | kg | Volume produzido no mês | `producaoKPIs[0]` |
+| 2 | `oee` | OEE | 78.5 | % | Eficiência global dos equipamentos | `producaoKPIs[1]` |
+| 3 | `disponibilidade` | Disponibilidade | 92.3 | % | Tempo que a máquina ficou operando | `producaoKPIs[2]` |
+| 4 | `performance` | Performance | 88.7 | % | Velocidade real vs velocidade ideal | `producaoKPIs[3]` |
+| 5 | `qualidade` | Qualidade | 95.8 | % | Produtos bons vs total produzido | `producaoKPIs[4]` |
+| 6 | `rendimento` | Rendimento Médio | 97.2 | % | Aproveitamento da matéria-prima | `producaoKPIs[5]` |
+| 7 | `perdas_processo` | Perdas Processo | 2.650 | kg | Refugos e retrabalhos | `producaoKPIs[6]` |
+| 8 | `mtbf` | MTBF | 48 | h | Tempo médio entre falhas | `producaoKPIs[7]` |
 
----
-
-### 3. Gráficos e Visualizações
-
-| # | Gráfico/Visualização | Dados | Mapeado? | Detecção Especial? | Status |
-|---|----------------------|-------|----------|---------------------|--------|
-| 1 | **Evolução OEE** (histórico) | `oeeHistorico` | ✅ SIM | ✅ SIM (`isOEEEvolutionQuestion` implícito) | ✅ OK |
-| 2 | **Perdas de Produção** (pizza) | `perdasProducao` | ✅ SIM (via `perdas_processo`) | ❌ NÃO | ⚠️ **Parcial** |
-| 3 | **Produtividade por Turno** | `produtividadeTurno` | ❌ NÃO | ❌ NÃO | ❌ **FALTANDO** |
-| 4 | **Rendimento por Linha** | `rendimentoPorLinha` | ✅ SIM (via `rendimento`) | ✅ SIM (`isWorstLineQuestion`) | ✅ OK |
-
-**Resultado**: ⚠️ **2/4 gráficos totalmente mapeados**
+**Fonte**: `src/services/mockData.ts` → `producaoKPIs`
 
 ---
 
-### 4. Detecções Especiais Implementadas
+### 1.2. OEE Destaque (Card Especial)
 
-| # | Detecção Especial | Função | Status |
-|---|-------------------|--------|--------|
-| 1 | **OEE por Linha Específica** | `isSpecificLineOEEQuestion()` | ✅ Implementado |
-| 2 | **Pior Linha (Rendimento)** | `isWorstLineQuestion()` | ✅ Implementado |
-| 3 | **Evolução de OEE/Indicadores** | Lógica inline no `agentProducao` | ✅ Implementado |
-| 4 | **Produtividade por Turno** | ❌ NÃO | ❌ **FALTANDO** |
-
-**Resultado**: ⚠️ **3/4 detecções especiais implementadas**
-
----
-
-## ✅ KPIs/Indicadores IMPLEMENTADOS
-
-### 1. **Produtividade por Turno** (`produtividade_turno`) ✅
-- **Status**: ✅ **IMPLEMENTADO**
-- **Mapeado em**:
-  - ✅ `KPI_KEYWORDS` no `kpi-scorer.ts` com palavras-chave completas
-  - ✅ Label em `kpi-labels.ts`
-  - ✅ Lógica especial no `agentProducao` para análise detalhada
-  - ✅ Meta em `kpi-metas.ts`
-- **Palavras-chave**: `['produtividade por turno', 'turno', 'turnos', 'volume por turno', 'kg por turno', 'turno 1', 'turno 2', 'turno 3']`
-- **Funcionalidades**:
-  - Análise completa de todos os turnos
-  - Comparação de eficiência entre turnos
-  - Identificação de melhor e pior turno
-  - Recomendações específicas por turno
+- **Título**: "OEE - Overall Equipment Effectiveness"
+- **Fórmula**: Disponibilidade × Performance × Qualidade
+- **OEE Total**: 78.5% (Meta: 85%)
+- **Componentes**:
+  - Disponibilidade: 92.3% (Tempo operando vs planejado)
+  - Performance: 88.7% (Velocidade real vs ideal)
+  - Qualidade: 95.8% (Produtos bons vs total)
+- **Cálculo**: 92.3% × 88.7% × 95.8% = 78.5%
+- **Fonte**: `src/pages/Producao.tsx` (hardcoded, mas valores vêm dos KPIs)
 
 ---
 
-### 2. **MTTR** (`mttr`) ✅
-- **Status**: ✅ **IMPLEMENTADO**
-- **Mapeado em**:
-  - ✅ `KPI_KEYWORDS` no `kpi-scorer.ts` com palavras-chave completas
-  - ✅ Label em `kpi-labels.ts`
-  - ✅ Lógica especial no `agentProducao` com análise de relação MTBF/MTTR
-  - ✅ Meta em `kpi-metas.ts` (3h)
-- **Palavras-chave**: `['mttr', 'tempo médio de reparo', 'tempo de reparo', 'reparo', 'manutenção']`
-- **Funcionalidades**:
-  - Análise de tempo médio de reparo
-  - Comparação com MTBF (relação MTBF/MTTR)
-  - Recomendações baseadas em threshold (3h)
+### 1.3. Gráficos
+
+#### 1.3.1. Evolução OEE
+- **Título**: "Evolução OEE"
+- **Subtítulo**: "Histórico mensal dos componentes"
+- **Tipo**: ComposedChart (Area + Line) (Recharts)
+- **Dados**: `oeeHistorico` (12 meses: Jan a Dez)
+- **Séries**:
+  - OEE (área)
+  - Disponibilidade (linha)
+  - Performance (linha)
+  - Qualidade (linha)
+- **Fonte**: `src/services/mockData.ts` → `oeeHistorico`
+
+#### 1.3.2. Perdas de Produção
+- **Título**: "Perdas de Produção"
+- **Subtítulo**: "Distribuição por tipo de defeito"
+- **Tipo**: PieChart (Recharts)
+- **Dados**: `perdasProducao`
+- **Tipos de perdas**:
+  1. Massa mole - 35% (927 kg)
+  2. Massa dura - 22% (583 kg)
+  3. Queimado - 18% (477 kg)
+  4. Formato irregular - 15% (398 kg)
+  5. Outros - 10% (265 kg)
+- **Fonte**: `src/services/mockData.ts` → `perdasProducao`
+
+#### 1.3.3. Produtividade por Turno
+- **Título**: "Produtividade por Turno"
+- **Subtítulo**: "Volume produzido vs meta (kg)"
+- **Tipo**: BarChart horizontal (Recharts)
+- **Dados**: `produtividadeTurno`
+- **Turnos**:
+  1. Turno 1 (6h-14h) - 52.840 kg (Meta: 50.000 kg, Eficiência: 105.7%)
+  2. Turno 2 (14h-22h) - 48.920 kg (Meta: 50.000 kg, Eficiência: 97.8%)
+  3. Turno 3 (22h-6h) - 44.060 kg (Meta: 45.000 kg, Eficiência: 97.9%)
+- **Fonte**: `src/services/mockData.ts` → `produtividadeTurno`
+
+#### 1.3.4. Rendimento por Linha
+- **Título**: "Rendimento por Linha"
+- **Subtítulo**: "Eficiência das linhas de produção"
+- **Tipo**: ProgressBar (customizado)
+- **Dados**: `rendimentoPorLinha`
+- **Linhas**:
+  1. Linha 1 - Francês - 97.8% (Meta: 97.0%)
+  2. Linha 2 - Forma - 96.5% (Meta: 97.0%)
+  3. Linha 3 - Doces - 97.2% (Meta: 96.5%)
+  4. Linha 4 - Especiais - 96.8% (Meta: 96.0%)
+- **Fonte**: `src/services/mockData.ts` → `rendimentoPorLinha`
 
 ---
 
-### 3. **Indicadores de Qualidade** (Temperatura, pH, Umidade) ⚠️
-- **Status**: ⚠️ **DECIDIDO: Tratados como parte de "Qualidade"**
-- **Decisão**: Estes indicadores são tratados como parte do KPI "Qualidade" existente
-- **Razão**: São métricas de controle de qualidade, não KPIs principais de produção
-- **Observação**: Se necessário no futuro, podem ser adicionados como KPIs separados
+### 1.4. Indicadores Adicionais (Cards Especiais)
+
+#### 1.4.1. MTTR (Tempo Médio de Reparo)
+- **Label**: "MTTR"
+- **Valor**: 2.5h
+- **Descrição**: "Tempo médio de reparo"
+- **Fonte**: `src/pages/Producao.tsx` (hardcoded)
+
+#### 1.4.2. Temperatura Forno
+- **Label**: "Temperatura Forno"
+- **Valor**: 180-220°C
+- **Conformidade**: 98.5%
+- **Fonte**: `src/pages/Producao.tsx` (hardcoded)
+
+#### 1.4.3. pH da Massa
+- **Label**: "pH da Massa"
+- **Valor**: 5.2 - 5.8
+- **Status**: "Dentro do padrão"
+- **Fonte**: `src/pages/Producao.tsx` (hardcoded)
+
+#### 1.4.4. Umidade
+- **Label**: "Umidade"
+- **Valor**: 38-42%
+- **Conformidade**: 97.2%
+- **Fonte**: `src/pages/Producao.tsx` (hardcoded)
 
 ---
 
-## 📋 Resumo Geral
+## 🤖 2. O QUE O AGENTE TEM MAPEADO
 
-| Categoria | Total | Mapeados | Faltando | % Completo |
-|-----------|-------|----------|----------|------------|
-| **KPIs Principais** | 8 | 8 | 0 | ✅ 100% |
-| **Indicadores Adicionais** | 4 | 2 | 2* | ✅ 50% |
-| **Gráficos/Visualizações** | 4 | 3 | 1 | ✅ 75% |
-| **Detecções Especiais** | 4 | 3 | 1 | ⚠️ 75% |
-| **TOTAL** | **20** | **16** | **4*** | ✅ **80%** |
+### 2.1. KPIs Principais (Catálogo)
 
-*_Indicadores de qualidade (Temperatura, pH, Umidade) são tratados como parte de "Qualidade"_
+| # | ID | Label | Unidade | Status | Fonte |
+|---|----|----|----|----|----|
+| 1 | `producao_total` | Produção Total | kg | ✅ Mapeado | `kpi-scorer.ts` |
+| 2 | `oee` | OEE | % | ✅ Mapeado | `kpi-scorer.ts` |
+| 3 | `disponibilidade` | Disponibilidade | % | ✅ Mapeado | `kpi-scorer.ts` |
+| 4 | `performance` | Performance | % | ✅ Mapeado | `kpi-scorer.ts` |
+| 5 | `qualidade` | Qualidade | % | ✅ Mapeado | `kpi-scorer.ts` |
+| 6 | `rendimento` | Rendimento Médio | % | ✅ Mapeado | `kpi-scorer.ts` |
+| 7 | `perdas_processo` | Perdas Processo | kg | ✅ Mapeado | `kpi-scorer.ts` |
+| 8 | `mtbf` | MTBF | h | ✅ Mapeado | `kpi-scorer.ts` |
+| 9 | `mttr` | MTTR | h | ✅ Mapeado | `kpi-scorer.ts` |
+| 10 | `produtividade_turno` | Produtividade por Turno | kg | ✅ Mapeado | `kpi-scorer.ts` |
+
+**Fonte**: 
+- `src/services/orchestrator/agents/kpi-scorer.ts` → `KPI_KEYWORDS`
+- `src/services/orchestrator/agents/index.ts` → `agentProducao()`
 
 ---
 
-## ✅ Conclusão Final
+### 2.2. Detecções Especiais
 
-O agente está **80% completo** em relação aos indicadores da página de Produção. 
+#### 2.2.1. OEE Específico de Linha (PASSO 0.1)
+- **Função**: `isSpecificLineOEEQuestion()` em `kpi-scorer.ts`
+- **Detecta**: Perguntas sobre OEE de uma linha específica
+- **Exemplo**: "qual o OEE da Linha 1?"
+- **Fonte de dados**: `pageContext.rendimentoLinhas` + `pageContext.kpis` (OEE geral)
+- **Status**: ✅ Implementado
 
-**Pontos fortes**:
-- ✅ Todos os 8 KPIs principais estão mapeados (100%)
-- ✅ `produtividade_turno` implementado com análise completa
-- ✅ `mttr` implementado com análise de relação MTBF/MTTR
-- ✅ Detecções especiais para OEE e Rendimento funcionando
-- ✅ Evolução de indicadores implementada
-- ✅ Análise detalhada de perdas por tipo
+#### 2.2.2. Evolução de OEE/Indicadores (PASSO 0.2)
+- **Detecta**: Perguntas sobre evolução de indicadores em um período
+- **Exemplo**: "evolução do OEE de jan a ago"
+- **Fonte de dados**: `pageContext.serieOEE` (oeeHistorico)
+- **Suporta**:
+  - OEE
+  - Disponibilidade
+  - Performance
+  - Qualidade
+  - Componentes (todos juntos)
+- **Status**: ✅ Implementado
 
-**Status atual**:
-- ✅ **16/20 indicadores mapeados** (80%)
-- ✅ **3/4 gráficos totalmente mapeados** (75%)
-- ✅ **3/4 detecções especiais implementadas** (75%)
+#### 2.2.3. Pior Linha (PASSO 0.3)
+- **Função**: `isWorstLineQuestion()` em `kpi-scorer.ts`
+- **Detecta**: Perguntas sobre "pior linha", "linha com menor rendimento"
+- **Exemplo**: "qual a linha que rendeu menos?"
+- **Fonte de dados**: `pageContext.rendimentoLinhas`
+- **Status**: ✅ Implementado
 
-**Decisões tomadas**:
-- ✅ Indicadores de qualidade (Temperatura, pH, Umidade) são tratados como parte do KPI "Qualidade" existente
-- ✅ `produtividade_turno` tem análise completa com comparação entre turnos
-- ✅ `mttr` tem análise com relação MTBF/MTTR e recomendações
+---
 
-**Próximos passos (opcional)**:
-- 🔄 Se necessário, adicionar indicadores de qualidade como KPIs separados no futuro
-- 🔄 Considerar adicionar detecção especial para perguntas sobre turnos específicos
+### 2.3. Keywords Mapeadas (Sistema de Scoring)
 
+**Fonte**: `src/services/orchestrator/agents/kpi-scorer.ts` → `KPI_KEYWORDS`
+
+| KPI | Keywords Exact | Keywords Primary | Keywords Secondary |
+|-----|---------------|------------------|-------------------|
+| `oee` | oee | eficiência global, eficiência dos equipamentos | eficiência, efetividade |
+| `disponibilidade` | disponibilidade | tempo operando, tempo funcionando, uptime | parada, paradas, downtime |
+| `performance` | performance | velocidade, ritmo, cadência | rápido, lento, devagar |
+| `qualidade` | qualidade | produtos bons, produtos aprovados | defeito, defeitos, refugo |
+| `rendimento` | rendimento, rendimento médio | aproveitamento, utilização | matéria-prima, mp |
+| `perdas_processo` | perdas processo, perdas de processo | perdas, perda, refugo, retrabalho | desperdício, massa mole, massa dura, queimado |
+| `producao_total` | produção total, volume produzido | volume, quantidade produzida, kg produzido | produção |
+| `mtbf` | mtbf, tempo médio entre falhas | falhas, quebras, manutenção | equipamento, equipamentos, máquina |
+| `mttr` | mttr, tempo médio de reparo | tempo de reparo, tempo reparo, reparo | manutenção, conserto |
+| `produtividade_turno` | produtividade por turno, produtividade turno | turno, turnos, volume por turno | produtividade, volume produzido |
+
+---
+
+## 💬 3. O QUE FOI REPASSADO AO CHAT (CONTEXTO)
+
+### 3.1. PageContext (Estrutura)
+
+**Fonte**: `src/services/orchestrator/page-context.ts` → `getPageContext('producao')`
+
+```typescript
+{
+  kpis: Array<{
+    id: string
+    label: string
+    value: number | string
+    unit: string
+    change?: number
+    trend?: string
+    description?: string
+  }>,
+  serieOEE: Array<{
+    name: string
+    oee?: number
+    disponibilidade?: number
+    performance?: number
+    qualidade?: number
+  }>,
+  rendimentoLinhas: Array<{
+    name: string
+    rendimento: number
+    meta: number
+  }>,
+  produtividadeTurnos: Array<{
+    name: string
+    valor: number
+    meta: number
+    eficiencia: number
+  }>,
+  perdasProducao: Array<{
+    name: string
+    value: number
+    kg: number
+  }>
+}
+```
+
+---
+
+### 3.2. Dados Repassados
+
+#### 3.2.1. KPIs (8 cards)
+✅ **Todos os 8 KPIs** são repassados via `pageContext.kpis`
+
+#### 3.2.2. Série Histórica OEE
+✅ **12 meses** são repassados via `pageContext.serieOEE`
+- Inclui: OEE, Disponibilidade, Performance, Qualidade
+
+#### 3.2.3. Rendimento por Linha
+✅ **4 linhas** são repassadas via `pageContext.rendimentoLinhas`
+- Inclui: Rendimento e Meta por linha
+
+#### 3.2.4. Produtividade por Turno
+✅ **3 turnos** são repassados via `pageContext.produtividadeTurnos`
+- Inclui: Valor, Meta, Eficiência por turno
+
+#### 3.2.5. Perdas de Produção
+✅ **5 tipos de perdas** são repassados via `pageContext.perdasProducao`
+- Inclui: Percentual e kg por tipo de perda
+
+---
+
+## ✅ 4. ANÁLISE DE COBERTURA
+
+### 4.1. KPIs Cards
+
+| Indicador | Na Página | No Agente | No Contexto | Status |
+|-----------|-----------|-----------|-------------|--------|
+| Produção Total | ✅ | ✅ | ✅ | ✅ **Coberto** |
+| OEE | ✅ | ✅ | ✅ | ✅ **Coberto** |
+| Disponibilidade | ✅ | ✅ | ✅ | ✅ **Coberto** |
+| Performance | ✅ | ✅ | ✅ | ✅ **Coberto** |
+| Qualidade | ✅ | ✅ | ✅ | ✅ **Coberto** |
+| Rendimento Médio | ✅ | ✅ | ✅ | ✅ **Coberto** |
+| Perdas Processo | ✅ | ✅ | ✅ | ✅ **Coberto** |
+| MTBF | ✅ | ✅ | ✅ | ✅ **Coberto** |
+
+**Resultado**: ✅ **100% coberto** (8/8)
+
+---
+
+### 4.2. OEE Destaque (Card Especial)
+
+| Componente | Na Página | No Agente | No Contexto | Status |
+|------------|-----------|-----------|-------------|--------|
+| OEE Total | ✅ | ✅ (via KPI) | ✅ (via KPI) | ✅ **Coberto** |
+| Disponibilidade | ✅ | ✅ (via KPI) | ✅ (via KPI) | ✅ **Coberto** |
+| Performance | ✅ | ✅ (via KPI) | ✅ (via KPI) | ✅ **Coberto** |
+| Qualidade | ✅ | ✅ (via KPI) | ✅ (via KPI) | ✅ **Coberto** |
+| Fórmula OEE | ✅ | ❌ | ❌ | ⚠️ **Não coberto** (apenas visual) |
+
+**Resultado**: ✅ **80% coberto** (4/5) - Fórmula é apenas visual
+
+---
+
+### 4.3. Gráficos
+
+| Gráfico | Na Página | No Agente | No Contexto | Status |
+|---------|-----------|-----------|-------------|--------|
+| Evolução OEE | ✅ | ✅ (PASSO 0.2) | ✅ (serieOEE) | ✅ **Coberto** |
+| Perdas de Produção | ✅ | ✅ (via perdas_processo) | ✅ (perdasProducao) | ✅ **Coberto** |
+| Produtividade por Turno | ✅ | ✅ (produtividade_turno) | ✅ (produtividadeTurnos) | ✅ **Coberto** |
+| Rendimento por Linha | ✅ | ✅ (via rendimento + PASSO 0.1, 0.3) | ✅ (rendimentoLinhas) | ✅ **Coberto** |
+
+**Resultado**: ✅ **100% coberto** (4/4)
+
+---
+
+### 4.4. Indicadores Adicionais
+
+| Indicador | Na Página | No Agente | No Contexto | Status |
+|-----------|-----------|-----------|-------------|--------|
+| MTTR | ✅ | ✅ | ⚠️ (hardcoded no agente) | ⚠️ **Parcial** |
+| Temperatura Forno | ✅ | ❌ | ❌ | ❌ **NÃO COBERTO** |
+| pH da Massa | ✅ | ❌ | ❌ | ❌ **NÃO COBERTO** |
+| Umidade | ✅ | ❌ | ❌ | ❌ **NÃO COBERTO** |
+
+**Resultado**: ⚠️ **25% coberto** (1/4)
+
+**Observações**:
+- **MTTR**: Está mapeado no agente, mas o valor é hardcoded (2.5h) no código do agente, não vem do contexto
+- **Temperatura, pH, Umidade**: Estão hardcoded na página e não estão no `mockData.ts`, portanto não são repassados ao contexto nem mapeados no agente
+
+---
+
+### 4.5. Indicadores Derivados (das Tabelas/Gráficos)
+
+#### 4.5.1. Perdas de Produção
+- ✅ Tipos de perdas (massa mole, dura, queimado, etc.) → **Coberto** (via `perdas_processo`)
+- ✅ Percentual por tipo → **Coberto** (via `perdasProducao`)
+- ✅ Quantidade em kg por tipo → **Coberto** (via `perdasProducao`)
+
+#### 4.5.2. Produtividade por Turno
+- ✅ Volume por turno → **Coberto** (via `produtividade_turno`)
+- ✅ Meta por turno → **Coberto** (via `produtividadeTurnos`)
+- ✅ Eficiência por turno → **Coberto** (via `produtividadeTurnos`)
+- ✅ Melhor/pior turno → **Coberto** (lógica no agente)
+
+#### 4.5.3. Rendimento por Linha
+- ✅ Rendimento por linha → **Coberto** (via `rendimento` + `rendimentoLinhas`)
+- ✅ Meta por linha → **Coberto** (via `rendimentoLinhas`)
+- ✅ Pior linha → **Coberto** (PASSO 0.3)
+- ✅ OEE por linha → **Coberto** (PASSO 0.1)
+
+---
+
+## 📊 5. RESUMO EXECUTIVO
+
+### 5.1. Cobertura Geral
+
+| Categoria | Total | Coberto | Não Coberto | % Coberto |
+|-----------|-------|---------|-------------|-----------|
+| **KPIs Cards** | 8 | 8 | 0 | **100%** ✅ |
+| **OEE Destaque** | 5 | 4 | 1 | **80%** ✅ |
+| **Gráficos** | 4 | 4 | 0 | **100%** ✅ |
+| **Indicadores Adicionais** | 4 | 1 | 3 | **25%** ⚠️ |
+| **TOTAL** | **21** | **17** | **4** | **81%** |
+
+---
+
+### 5.2. Pontos Fortes
+
+✅ **Todos os KPIs principais** estão mapeados e funcionais  
+✅ **Gráficos** são acessíveis via contexto (serieOEE, perdasProducao, produtividadeTurnos, rendimentoLinhas)  
+✅ **Detecções especiais** cobrem casos de uso importantes:
+   - OEE específico de linha
+   - Evolução de OEE/indicadores
+   - Pior linha (rendimento)
+   - Produtividade por turno
+   - Perdas de produção
+
+✅ **Análises específicas** implementadas:
+   - Ranking de perdas
+   - Comparação de turnos (melhor/pior)
+   - Comparação de linhas
+   - Relação MTBF/MTTR
+
+---
+
+### 5.3. Gaps Identificados
+
+⚠️ **MTTR** (2.5h)
+- Está mapeado no agente e funciona
+- Mas o valor é hardcoded no código do agente (não vem do contexto)
+- **Recomendação**: Adicionar MTTR ao `mockData.ts` e `pageContext` para ter dados dinâmicos
+
+❌ **Temperatura Forno** (180-220°C, Conformidade: 98.5%)
+- Não está no `mockData.ts`
+- Não está no `pageContext`
+- Não está mapeado no agente
+- **Recomendação**: Adicionar ao `mockData.ts` e `pageContext` se for um indicador importante
+
+❌ **pH da Massa** (5.2 - 5.8)
+- Não está no `mockData.ts`
+- Não está no `pageContext`
+- Não está mapeado no agente
+- **Recomendação**: Adicionar ao `mockData.ts` e `pageContext` se for um indicador importante
+
+❌ **Umidade** (38-42%, Conformidade: 97.2%)
+- Não está no `mockData.ts`
+- Não está no `pageContext`
+- Não está mapeado no agente
+- **Recomendação**: Adicionar ao `mockData.ts` e `pageContext` se for um indicador importante
+
+---
+
+## 🔧 6. RECOMENDAÇÕES
+
+### 6.1. Prioridade Alta
+
+1. **Adicionar MTTR ao contexto**
+   - Adicionar `mttr` ao `producaoKPIs` no `mockData.ts`
+   - Atualizar `pageContext` para incluir MTTR
+   - Remover valor hardcoded do agente
+
+### 6.2. Prioridade Média
+
+2. **Decidir sobre indicadores de qualidade**
+   - Se "Temperatura Forno", "pH da Massa" e "Umidade" são indicadores importantes para o agente responder, adicionar ao `mockData.ts` e `pageContext`
+   - Se não são importantes, manter como está (apenas visual)
+
+3. **Melhorar detecção de indicadores derivados**
+   - Adicionar keywords para "temperatura", "ph", "umidade" se forem adicionados ao contexto
+
+### 6.3. Prioridade Baixa
+
+4. **Documentar indicadores não cobertos**
+   - Criar lista de indicadores que são apenas visuais e não precisam ser cobertos pelo agente
+
+---
+
+## 📝 7. CONCLUSÃO
+
+O agente de Produção está **muito bem coberto** para os indicadores principais:
+- ✅ Todos os 8 KPIs cards estão mapeados
+- ✅ Gráficos são acessíveis via contexto
+- ✅ Detecções especiais cobrem casos de uso importantes
+- ✅ Análises específicas implementadas (perdas, turnos, linhas)
+
+Os gaps são:
+- ⚠️ **MTTR**: Mapeado mas valor hardcoded (deveria vir do contexto)
+- ❌ **Indicadores de qualidade** (Temperatura, pH, Umidade): Não estão no contexto nem mapeados
+
+**Status Geral**: ✅ **81% coberto** (17/21 indicadores principais)
+
+---
+
+**Data do Relatório**: Hoje  
+**Versão**: 1.0  
+**Autor**: Análise Automatizada

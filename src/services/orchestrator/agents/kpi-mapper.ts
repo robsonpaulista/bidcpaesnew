@@ -41,6 +41,10 @@ export const KPI_MAPPINGS: Record<string, KPIMapping[]> = {
     { keywords: ['rendimento', 'rendimento médio', 'rendimento medio'], kpiId: 'rendimento', kpiLabel: 'Rendimento Médio' },
     { keywords: ['perdas', 'perdas processo'], kpiId: 'perdas_processo', kpiLabel: 'Perdas Processo' },
     { keywords: ['mtbf', 'tempo médio falhas', 'tempo medio falhas'], kpiId: 'mtbf', kpiLabel: 'MTBF' },
+    { keywords: ['mttr', 'tempo médio reparo', 'tempo medio reparo'], kpiId: 'mttr', kpiLabel: 'MTTR' },
+    { keywords: ['temperatura forno', 'temperatura do forno'], kpiId: 'temperatura_forno', kpiLabel: 'Temperatura do Forno' },
+    { keywords: ['ph massa', 'ph da massa', 'ph'], kpiId: 'ph_massa', kpiLabel: 'pH da Massa' },
+    { keywords: ['umidade', 'umidade relativa'], kpiId: 'umidade', kpiLabel: 'Umidade' },
   ],
   estoque: [
     { keywords: ['valor estoque', 'estoque'], kpiId: 'valor_estoque', kpiLabel: 'Valor em Estoque' },
