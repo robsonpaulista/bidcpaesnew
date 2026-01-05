@@ -280,7 +280,7 @@ export function agentComprasStructured(
   }
   
   // Adiciona dados relacionados se aplicável
-  if (selection.kpiId === 'otd_fornecedores' && context.rankingFornecedores.length > 0) {
+  if (selection.kpiId === 'otd_fornecedores' && context.rankingFornecedores && context.rankingFornecedores.length > 0) {
     const fornecedoresBaixos = context.rankingFornecedores.filter(f => f.otd < 90)
     if (fornecedoresBaixos.length > 0) {
       fornecedoresBaixos.forEach(f => {
@@ -301,7 +301,7 @@ export function agentComprasStructured(
     }
   }
   
-  if (selection.kpiId === 'nao_conformidades' && context.rankingFornecedores.length > 0) {
+  if (selection.kpiId === 'nao_conformidades' && context.rankingFornecedores && context.rankingFornecedores.length > 0) {
     const fornecedoresBaixos = context.rankingFornecedores.filter(f => f.qualidade < 95)
     if (fornecedoresBaixos.length > 0) {
       fornecedoresBaixos.forEach(f => {
