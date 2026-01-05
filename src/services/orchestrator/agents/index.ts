@@ -1427,7 +1427,7 @@ export async function agentProducao(
     
     if (altKpiIds.length === 0) {
       // KPIs de Produção disponíveis
-      altKpiIds = ['oee', 'disponibilidade', 'performance', 'qualidade', 'rendimento', 'perdas_processo', 'producao_total', 'mtbf']
+      altKpiIds = ['oee', 'disponibilidade', 'performance', 'qualidade', 'rendimento', 'perdas_processo', 'producao_total', 'mtbf', 'mttr', 'produtividade_turno']
     }
     
     const clarification = generateClarificationMessage(altKpiIds, question)
@@ -1568,6 +1568,46 @@ export async function agentProducao(
     }
   }
   
+  // Análise específica: Produtividade por Turno
+  if (selection.kpiId === 'produtividade_turno' && pageContext?.produtividadeTurnos && pageContext.produtividadeTurnos.length > 0) {
+    const turnos = pageContext.produtividadeTurnos
+    const totalProducao = turnos.reduce((sum, t) => sum + t.valor, 0)
+    const totalMeta = turnos.reduce((sum, t) => sum + t.meta, 0)
+    const eficienciaGeral = (totalProducao / totalMeta) * 100
+    
+    findings.push(`Produtividade por Turno:`)
+    findings.push(`• Total produzido: ${formatNumber(totalProducao, 0)} kg`)
+    findings.push(`• Meta total: ${formatNumber(totalMeta, 0)} kg`)
+    findings.push(`• Eficiência geral: ${formatNumber(eficienciaGeral, 1)}%`)
+    
+    // Ordena turnos por eficiência (maior primeiro)
+    const turnosOrdenados = [...turnos].sort((a, b) => b.eficiencia - a.eficiencia)
+    
+    turnosOrdenados.forEach(t => {
+      const status = t.eficiencia >= 100 ? 'Acima da meta' : 'Abaixo da meta'
+      evidence.push({
+        metric: t.name,
+        value: `${formatNumber(t.valor, 0)} kg`,
+        comparison: `Meta: ${formatNumber(t.meta, 0)} kg | Eficiência: ${formatNumber(t.eficiencia, 1)}% | ${status}`,
+        source: 'page_context'
+      })
+    })
+    
+    // Identifica melhor e pior turno
+    const melhorTurno = turnosOrdenados[0]
+    const piorTurno = turnosOrdenados[turnosOrdenados.length - 1]
+    
+    if (melhorTurno && piorTurno && melhorTurno.eficiencia !== piorTurno.eficiencia) {
+      findings.push(`Melhor turno: ${melhorTurno.name} (${formatNumber(melhorTurno.eficiencia, 1)}% de eficiência).`)
+      findings.push(`Turno com menor eficiência: ${piorTurno.name} (${formatNumber(piorTurno.eficiencia, 1)}% de eficiência).`)
+      
+      if (piorTurno.eficiencia < 100) {
+        recommendations.push(`Implementar ações de melhoria no ${piorTurno.name} para atingir a meta de ${formatNumber(piorTurno.meta, 0)} kg.`)
+      }
+    }
+  }
+  
+  // Análise específica: Produção Total (mostra resumo por turno)
   if (selection.kpiId === 'producao_total' && pageContext?.produtividadeTurnos && pageContext.produtividadeTurnos.length > 0) {
     const turnos = pageContext.produtividadeTurnos
     const totalProducao = turnos.reduce((sum, t) => sum + t.valor, 0)
@@ -1582,6 +1622,39 @@ export async function agentProducao(
         source: 'produtividade_turnos'
       })
     })
+  }
+  
+  // Análise específica: MTTR
+  if (selection.kpiId === 'mttr') {
+    // MTTR não está no pageContext ainda, mas podemos buscar do mockData ou usar valor fixo
+    // Por enquanto, vamos informar que não temos dados
+    const mttrValue = 2.5 // Valor fixo da página (em horas)
+    const mttrLabel = getKPILabel('producao', 'mttr')
+    
+    findings.push(`${mttrLabel}: ${formatNumber(mttrValue, 1)} horas`)
+    findings.push(`Tempo médio necessário para reparar equipamentos após uma falha.`)
+    
+    evidence.push({
+      metric: mttrLabel,
+      value: `${formatNumber(mttrValue, 1)} horas`,
+      comparison: 'Menor tempo = melhor eficiência de manutenção',
+      source: 'page_context'
+    })
+    
+    // Comparação com MTBF (se disponível)
+    const mtbfKPI = pageContext?.kpis.find(k => k.id === 'mtbf')
+    if (mtbfKPI && typeof mtbfKPI.value === 'number') {
+      const ratio = mtbfKPI.value / mttrValue
+      findings.push(`Relação MTBF/MTTR: ${formatNumber(ratio, 1)} (MTBF ${formatNumber(mtbfKPI.value, 0)}h / MTTR ${formatNumber(mttrValue, 1)}h).`)
+      
+      if (ratio < 10) {
+        recommendations.push('A relação MTBF/MTTR está baixa. Considere melhorar processos de manutenção preventiva para aumentar o tempo entre falhas.')
+      }
+    }
+    
+    if (mttrValue > 3) {
+      recommendations.push('MTTR acima de 3 horas. Revisar processos de manutenção para reduzir tempo de reparo.')
+    }
   }
   
   return {

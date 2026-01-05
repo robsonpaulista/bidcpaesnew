@@ -28,7 +28,10 @@ export const KPI_LABELS: Record<string, Record<string, string>> = {
     'rendimento_medio': 'Rendimento Médio',
     'perdas_processo': 'Perdas Processo',
     'perdas': 'Perdas Processo',
-    'mtbf': 'MTBF'
+    'mtbf': 'MTBF',
+    'mttr': 'MTTR',
+    'produtividade_turno': 'Produtividade por Turno',
+    'produtividade_turnos': 'Produtividade por Turno'
   }
 }
 

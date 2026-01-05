@@ -108,6 +108,19 @@ const KPI_KEYWORDS: Record<string, Array<{ keywords: string[], weight: number }>
     { keywords: ['mtbf', 'tempo médio entre falhas', 'tempo medio entre falhas'], weight: KEYWORD_WEIGHTS.exact },
     { keywords: ['falhas', 'quebras', 'manutenção', 'manutencao'], weight: KEYWORD_WEIGHTS.primary },
     { keywords: ['equipamento', 'equipamentos', 'máquina', 'maquina'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  mttr: [
+    { keywords: ['mttr', 'tempo médio de reparo', 'tempo medio de reparo'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['tempo de reparo', 'tempo reparo', 'reparo', 'reparos'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['manutenção', 'manutencao', 'conserto', 'consertos'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['equipamento', 'equipamentos', 'máquina', 'maquina'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  produtividade_turno: [
+    { keywords: ['produtividade por turno', 'produtividade turno', 'produtividade turnos'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['turno', 'turnos', 'volume por turno', 'kg por turno', 'produção por turno', 'producao por turno'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['turno 1', 'turno 2', 'turno 3', 'primeiro turno', 'segundo turno', 'terceiro turno'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['produtividade', 'volume produzido', 'kg produzido'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao'], weight: KEYWORD_WEIGHTS.context }
   ]
 }
 

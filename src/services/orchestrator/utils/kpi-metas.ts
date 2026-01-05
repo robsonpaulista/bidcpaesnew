@@ -23,7 +23,9 @@ export const KPI_METAS: Record<string, number> = {
   'rendimento': 97, // Rendimento meta: 97%
   'perdas_processo': 2, // Perdas meta: <2% (quanto menor melhor)
   'producao_total': 0, // Não tem meta fixa
-  'mtbf': 48 // MTBF meta: 48h
+  'mtbf': 48, // MTBF meta: 48h
+  'mttr': 3, // MTTR meta: <3h (quanto menor melhor)
+  'produtividade_turno': 0 // Não tem meta fixa (depende de cada turno)
 }
 
 export function getKPIMeta(area: string, kpiId: string): number | null {
