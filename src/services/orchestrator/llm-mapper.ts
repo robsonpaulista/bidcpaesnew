@@ -315,6 +315,45 @@ function mapWithKeywords(question: string, context?: Record<string, unknown>): L
   const lowerQuestion = question.toLowerCase()
   const normalizedQuestion = lowerQuestion.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   
+  // PRIORIDADE 0: Se está na área de produção e menciona indicadores de produção, força analyze_production_efficiency
+  if (context?.area === 'producao') {
+    const productionKeywords = [
+      'produtividade', 'produtividade por turno', 'turno', 'turnos',
+      'linha', 'linhas', 'linha 1', 'linha 2', 'linha 3', 'linha 4',
+      'oee', 'eficiência', 'eficiencia', 'disponibilidade', 'performance', 'qualidade',
+      'rendimento', 'perdas', 'perda', 'refugo', 'refugos',
+      'produção', 'producao', 'volume produzido', 'meta', 'metas',
+      'francês', 'frances', 'forma', 'doces', 'especiais',
+      'massa mole', 'massa dura', 'queimado', 'formato irregular'
+    ]
+    
+    const hasProductionKeyword = productionKeywords.some(kw => {
+      const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      return normalizedQuestion.includes(normalizedKw) || lowerQuestion.includes(kw)
+    })
+    
+    // Se menciona indicadores de produção, força analyze_production_efficiency
+    if (hasProductionKeyword) {
+      const entities: LLMMappingResult['entities'] = {}
+      if (lowerQuestion.includes('linha 1')) entities.linha = 'Linha 1 - Francês'
+      if (lowerQuestion.includes('linha 2')) entities.linha = 'Linha 2 - Forma'
+      if (lowerQuestion.includes('linha 3')) entities.linha = 'Linha 3 - Doces'
+      if (lowerQuestion.includes('linha 4')) entities.linha = 'Linha 4 - Especiais'
+      if (lowerQuestion.includes('oee')) entities.kpi = 'oee'
+      if (lowerQuestion.includes('disponibilidade')) entities.kpi = 'disponibilidade'
+      if (lowerQuestion.includes('performance')) entities.kpi = 'performance'
+      if (lowerQuestion.includes('qualidade')) entities.kpi = 'qualidade'
+      if (lowerQuestion.includes('rendimento')) entities.kpi = 'rendimento'
+      if (lowerQuestion.includes('perdas')) entities.kpi = 'perdas'
+      
+      return {
+        intent: 'analyze_production_efficiency',
+        confidence: 0.95,
+        entities
+      }
+    }
+  }
+
   // PRIORIDADE 1: Detecção especial de evolução de preços de insumos
   // Se menciona evolução/variação + preço + insumo + período, força analyze_supplier_performance
   const evolutionKeywords = [
@@ -487,11 +526,55 @@ export async function mapQuestionToIntentionWithLLM(
         return mapWithKeywords(question, context)
     }
 
-    // CORREÇÃO CRÍTICA: Verifica se o LLM mapeou errado para evolução de preços de insumos
-    // Se detecta padrão de evolução de preços de insumo mas LLM mapeou para outra intenção, corrige
+    // CORREÇÃO CRÍTICA 1: Se está na área de produção e menciona indicadores de produção, força analyze_production_efficiency
     const lowerQuestion = question.toLowerCase()
     const normalizedQuestion = lowerQuestion.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     
+    if (context?.area === 'producao') {
+      const productionKeywords = [
+        'produtividade', 'produtividade por turno', 'turno', 'turnos',
+        'linha', 'linhas', 'linha 1', 'linha 2', 'linha 3', 'linha 4',
+        'oee', 'eficiência', 'eficiencia', 'disponibilidade', 'performance', 'qualidade',
+        'rendimento', 'perdas', 'perda', 'refugo', 'refugos',
+        'produção', 'producao', 'volume produzido', 'meta', 'metas',
+        'francês', 'frances', 'forma', 'doces', 'especiais',
+        'massa mole', 'massa dura', 'queimado', 'formato irregular'
+      ]
+      
+      const hasProductionKeyword = productionKeywords.some(kw => {
+        const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        return normalizedQuestion.includes(normalizedKw) || lowerQuestion.includes(kw)
+      })
+      
+      if (hasProductionKeyword && result.intent !== 'analyze_production_efficiency') {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('⚠️ LLM mapeou errado para área de produção, corrigindo para analyze_production_efficiency:', {
+            originalIntent: result.intent,
+            question: question.substring(0, 50)
+          })
+        }
+        result.intent = 'analyze_production_efficiency'
+        result.confidence = 0.95
+        // Adiciona entidades de produção se não existirem
+        if (!result.entities.linha) {
+          if (lowerQuestion.includes('linha 1')) result.entities.linha = 'Linha 1 - Francês'
+          if (lowerQuestion.includes('linha 2')) result.entities.linha = 'Linha 2 - Forma'
+          if (lowerQuestion.includes('linha 3')) result.entities.linha = 'Linha 3 - Doces'
+          if (lowerQuestion.includes('linha 4')) result.entities.linha = 'Linha 4 - Especiais'
+        }
+        if (!result.entities.kpi) {
+          if (lowerQuestion.includes('oee')) result.entities.kpi = 'oee'
+          if (lowerQuestion.includes('disponibilidade')) result.entities.kpi = 'disponibilidade'
+          if (lowerQuestion.includes('performance')) result.entities.kpi = 'performance'
+          if (lowerQuestion.includes('qualidade')) result.entities.kpi = 'qualidade'
+          if (lowerQuestion.includes('rendimento')) result.entities.kpi = 'rendimento'
+          if (lowerQuestion.includes('perdas')) result.entities.kpi = 'perdas'
+        }
+      }
+    }
+    
+    // CORREÇÃO CRÍTICA 2: Verifica se o LLM mapeou errado para evolução de preços de insumos
+    // Se detecta padrão de evolução de preços de insumo mas LLM mapeou para outra intenção, corrige
     const evolutionKeywords = [
       'evolução', 'evolucao', 'variação', 'variacao', 'variação mensal', 'variacao mensal',
       'tendência', 'tendencia', 'histórico', 'historico', 'série', 'serie'

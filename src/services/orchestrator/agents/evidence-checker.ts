@@ -161,7 +161,40 @@ export function checkEvidenceForKPI(
         availableFields: []
       }
 
+    // KPIs de Produção
+    case 'oee':
+    case 'disponibilidade':
+    case 'performance':
+    case 'qualidade':
+    case 'rendimento':
+    case 'perdas_processo':
+    case 'producao_total':
+    case 'mtbf':
+      // Para KPIs de Produção, verifica se existe no contexto
+      const producaoKpi = pageContext.kpis.find(k => k.id === kpiId)
+      if (producaoKpi && producaoKpi.value !== undefined && producaoKpi.value !== null) {
+        return {
+          hasMinimumEvidence: true,
+          missingFields: [],
+          availableFields: [`${kpiId}_value`]
+        }
+      }
+      return {
+        hasMinimumEvidence: false,
+        missingFields: [`${kpiId}_value`],
+        availableFields: []
+      }
+
     default:
+      // Para KPIs desconhecidos, verifica se existe no contexto genérico
+      const genericKpi = pageContext.kpis.find(k => k.id === kpiId)
+      if (genericKpi && genericKpi.value !== undefined && genericKpi.value !== null) {
+        return {
+          hasMinimumEvidence: true,
+          missingFields: [],
+          availableFields: [`${kpiId}_value`]
+        }
+      }
       return {
         hasMinimumEvidence: false,
         missingFields: ['unknown_kpi'],
@@ -178,13 +211,23 @@ export function generateClarificationMessage(
   question: string
 ): { message: string; options: string[] } {
   const kpiLabels: Record<string, string> = {
+    // Compras
     'otd_fornecedores': 'OTD (entregas no prazo)',
     'fill_rate': 'Fill Rate (pedido completo)',
     'lead_time_medio': 'Lead Time (quantos dias)',
     'nao_conformidades': 'Qualidade / Não Conformidades',
     'custo_total_mp': 'Custo / Variação de Preço',
     'cobertura_estoque_mp': 'Cobertura de Estoque',
-    'dependencia_fornecedores': 'Dependência / Volume de Compras por Fornecedor'
+    'dependencia_fornecedores': 'Dependência / Volume de Compras por Fornecedor',
+    // Produção
+    'oee': 'OEE',
+    'disponibilidade': 'Disponibilidade',
+    'performance': 'Performance',
+    'qualidade': 'Qualidade',
+    'rendimento': 'Rendimento Médio',
+    'perdas_processo': 'Perdas Processo',
+    'producao_total': 'Produção Total',
+    'mtbf': 'MTBF'
   }
 
   const options = alternativeKpis

@@ -80,7 +80,7 @@ export async function agentCustosMargem(
 // ==========================================
 
 import { getPageContext } from '../page-context.js'
-import { scoreKPIs, selectMainKPIFromScores, checkKnownAmbiguities, isWorstInputQuestion, isSpecificInputPriceQuestion } from './kpi-scorer.js'
+import { scoreKPIs, selectMainKPIFromScores, checkKnownAmbiguities, isWorstInputQuestion, isSpecificInputPriceQuestion, isSpecificLineOEEQuestion, isWorstLineQuestion } from './kpi-scorer.js'
 import { checkEvidenceForKPI, generateClarificationMessage } from './evidence-checker.js'
 import { getKPILabel } from '../kpi-labels.js'
 import { formatCurrency, formatValueWithUnit, formatNumber } from '../utils/format.js'
@@ -809,7 +809,7 @@ export async function agentComprasFornecedores(
   
   // PASSO 7: Monta resposta com dados do KPI (com formatação melhor) - apenas se tem card
   if (kpi) {
-    const meta = getKPIMeta(selection.kpiId) || getKPIMeta(backendKpiId)
+    const meta = getKPIMeta('compras', selection.kpiId) || getKPIMeta('compras', backendKpiId)
     const kpiValue = typeof kpi.value === 'number' ? kpi.value : parseFloat(String(kpi.value)) || 0
     const formattedEvidence = formatEvidenceMessage(kpiValue, kpi.unit || '', kpi.change, meta, selection.kpiId)
     
@@ -983,54 +983,581 @@ export async function agentProducao(
   const findings: string[] = []
   const evidence: AgentResponse['evidence'] = []
   const recommendations: string[] = []
+  const limitations: string[] = []
+  const kpiConfidence = 0 // Será calculado
 
-  // Analisa OEE
-  const line = (context?.line as string) || 'Linha 1 - Francês'
-  const oeeData = await DataAdapter.get_oee(line, 'dezembro')
+  // PASSO 0.1: Detecção especial de OEE específico de linha (ex: "qual o OEE da Linha 1?")
+  const oeeQuestionCheck = isSpecificLineOEEQuestion(question)
+  if (oeeQuestionCheck.isOEEQuestion && oeeQuestionCheck.lineName) {
+    const pageContext = getPageContext('producao', 'dezembro')
+    
+    if (pageContext?.rendimentoLinhas && pageContext.rendimentoLinhas.length > 0) {
+      // Busca a linha na tabela de rendimento (que tem OEE implícito)
+      const line = pageContext.rendimentoLinhas.find(l => {
+        const normalizedLineName = oeeQuestionCheck.lineName!.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        const normalizedLName = l.name.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        return normalizedLName.includes(normalizedLineName) || normalizedLineName.includes(normalizedLName.split(' ')[0])
+      })
+      
+      if (line) {
+        // Busca OEE atual nos KPIs
+        const oeeKPI = pageContext.kpis.find(k => k.id === 'oee')
+        const oeeValue = typeof oeeKPI?.value === 'number' ? oeeKPI.value : 0
+        
+        findings.push(
+          `OEE da ${line.name}: ${formatNumber(oeeValue, 1)}%`
+        )
+        
+        if (oeeKPI?.change !== undefined) {
+          const changeText = oeeKPI.change > 0 ? `+${formatNumber(oeeKPI.change, 1)}%` : `${formatNumber(oeeKPI.change, 1)}%`
+          findings.push(`Variação: ${changeText} vs período anterior.`)
+          evidence.push({
+            metric: `${line.name} - OEE`,
+            value: `${formatNumber(oeeValue, 1)}%`,
+            comparison: `Variação: ${changeText}`,
+            source: 'page_context'
+          })
+        } else {
+          evidence.push({
+            metric: `${line.name} - OEE`,
+            value: `${formatNumber(oeeValue, 1)}%`,
+            source: 'page_context'
+          })
+        }
+        
+        // Adiciona rendimento da linha
+        if (line.rendimento) {
+          findings.push(`Rendimento: ${formatNumber(line.rendimento, 1)}% (Meta: ${formatNumber(line.meta, 1)}%)`)
+          evidence.push({
+            metric: `${line.name} - Rendimento`,
+            value: `${formatNumber(line.rendimento, 1)}%`,
+            comparison: `Meta: ${formatNumber(line.meta, 1)}%`,
+            source: 'page_context'
+          })
+        }
+        
+        const finalConfidence = 90
+        
+        return {
+          agent: 'producao',
+          confidence: finalConfidence,
+          findings,
+          evidence,
+          recommendations,
+          limitations: [],
+          thoughtProcess: {
+            kpiPrincipal: 'oee',
+            area: 'producao',
+            dataSource: 'page_context',
+            kpiConfidence: 95
+          }
+        }
+      }
+    }
+    
+    // Se não tem dados, informa
+    return {
+      agent: 'producao',
+      confidence: 0,
+      findings: [
+        'Não consegui ler os dados de OEE da página agora.',
+        'Você está com o painel de Produção carregado?'
+      ],
+      evidence: [],
+      recommendations: [],
+      limitations: ['Dados não disponíveis no contexto da página']
+    }
+  }
+
+  // PASSO 0.2: Detecção especial de evolução de OEE/indicadores
+  // Detecta quando a pergunta pede evolução de indicadores em um período
+  const lowerQuestion = question.toLowerCase()
   
-  if (oeeData.oee < 80) {
-    findings.push(`OEE de ${oeeData.oee}% abaixo da meta de 80%`)
+  // Palavras-chave que indicam evolução/série temporal
+  const evolutionKeywords = [
+    'evolução', 'evolucao', 'evoluir', 'evoluiu',
+    'variação', 'variacao', 'variações', 'variacoes', 'variação mensal', 'variacao mensal',
+    'tendência', 'tendencia', 'tendências', 'tendencias',
+    'período', 'periodo', 'períodos', 'periodos',
+    'ao longo', 'ao longo do', 'durante', 'no período', 'no periodo',
+    'histórico', 'historico', 'histórica', 'historica',
+    'série', 'serie', 'séries', 'series',
+    'gráfico', 'grafico', 'gráficos', 'graficos',
+    'me mostre', 'mostre', 'mostrar', 'mostrar os', 'mostrar as'
+  ]
+  
+  // Verifica se menciona período (meses)
+  const monthKeywords = [
+    'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez',
+    'janeiro', 'fevereiro', 'março', 'marco', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+  ]
+  const hasMonthKeyword = monthKeywords.some(kw => {
+    const regex = new RegExp(`\\b${kw}\\b`, 'i')
+    if (regex.test(lowerQuestion)) return true
+    
+    const pos = lowerQuestion.indexOf(kw)
+    if (pos === -1) return false
+    const before = pos > 0 ? lowerQuestion[pos - 1] : ' '
+    const after = pos + kw.length < lowerQuestion.length ? lowerQuestion[pos + kw.length] : ' '
+    return (/[\s,.\-]/.test(before) || pos === 0) && (/[\s,.\-?]/.test(after) || pos + kw.length === lowerQuestion.length)
+  })
+  
+  // Verifica se menciona "a" ou "até" entre meses (indica período)
+  const hasPeriodConnector = (lowerQuestion.includes(' a ') || 
+                              lowerQuestion.includes(' até ') || 
+                              lowerQuestion.includes(' ate ')) && hasMonthKeyword
+  
+  // Normaliza a pergunta para busca sem acentos
+  const normalizedQuestion = lowerQuestion.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  
+  const hasEvolutionKeyword = evolutionKeywords.some(kw => {
+    const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return normalizedQuestion.includes(normalizedKw)
+  })
+  
+  // Detecta indicadores de produção mencionados
+  const indicatorKeywords = ['oee', 'disponibilidade', 'performance', 'qualidade', 'rendimento', 'perdas']
+  const hasIndicatorKeyword = indicatorKeywords.some(kw => lowerQuestion.includes(kw))
+  
+  // Detecta linha mencionada (opcional)
+  const lineKeywords = ['linha 1', 'linha 2', 'linha 3', 'linha 4', 'francês', 'frances', 'forma', 'doces', 'especiais']
+  const hasLineKeyword = lineKeywords.some(kw => lowerQuestion.includes(kw))
+  
+  // Detecta evolução se:
+  // 1. Tem palavra-chave explícita de evolução + indicador + (opcionalmente) linha, OU
+  // 2. Tem período (meses) + indicador + (opcionalmente) linha
+  const isEvolutionQuestion = (hasEvolutionKeyword && hasIndicatorKeyword) ||
+                              (hasMonthKeyword && hasPeriodConnector && hasIndicatorKeyword)
+  
+  if (isEvolutionQuestion) {
+    const pageContext = getPageContext('producao', 'dezembro')
+    
+    if (pageContext?.serieOEE && pageContext.serieOEE.length > 0) {
+      // Determina qual indicador analisar
+      let targetIndicator: 'oee' | 'disponibilidade' | 'performance' | 'qualidade' | null = null
+      if (lowerQuestion.includes('oee')) {
+        targetIndicator = 'oee'
+      } else if (lowerQuestion.includes('disponibilidade')) {
+        targetIndicator = 'disponibilidade'
+      } else if (lowerQuestion.includes('performance')) {
+        targetIndicator = 'performance'
+      } else if (lowerQuestion.includes('qualidade')) {
+        targetIndicator = 'qualidade'
+      } else {
+        // Default: OEE
+        targetIndicator = 'oee'
+      }
+      
+      // Extrai período se mencionado
+      const monthMap: Record<string, string> = {
+        'ago': 'Ago', 'set': 'Set', 'out': 'Out', 'nov': 'Nov', 'dez': 'Dez',
+        'jan': 'Jan', 'fev': 'Fev', 'abr': 'Abr', 'mai': 'Mai', 'jun': 'Jun', 'jul': 'Jul',
+        'mar': 'Mar',
+        'agosto': 'Ago', 'setembro': 'Set', 'outubro': 'Out', 'novembro': 'Nov', 'dezembro': 'Dez',
+        'janeiro': 'Jan', 'fevereiro': 'Fev', 'abril': 'Abr', 'maio': 'Mai', 'junho': 'Jun',
+        'julho': 'Jul', 'março': 'Mar', 'marco': 'Mar'
+      }
+      
+      const monthOrder: Record<string, number> = {
+        'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4,
+        'Mai': 5, 'Jun': 6, 'Jul': 7, 'Ago': 8,
+        'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12
+      }
+      
+      let startMonth: string | null = null
+      let endMonth: string | null = null
+      const foundMonths: Array<{ abbr: string; full: string; position: number }> = []
+      
+      const isIsolatedMonth = (text: string, monthAbbr: string, position: number): boolean => {
+        const before = position > 0 ? text[position - 1] : ' '
+        const after = position + monthAbbr.length < text.length ? text[position + monthAbbr.length] : ' '
+        return (/[\s,.\-]/.test(before) || position === 0) && (/[\s,.\-?]/.test(after) || position + monthAbbr.length === text.length)
+      }
+      
+      // Busca todos os meses mencionados
+      const sortedMonthEntries = Object.entries(monthMap).sort((a, b) => {
+        if (a[0].length !== b[0].length) return b[0].length - a[0].length
+        return a[0].localeCompare(b[0])
+      })
+      
+      for (const [abbr, full] of sortedMonthEntries) {
+        let searchPos = 0
+        while (true) {
+          const position = lowerQuestion.indexOf(abbr, searchPos)
+          if (position === -1) break
+          
+          if (isIsolatedMonth(lowerQuestion, abbr, position)) {
+            const alreadyFound = foundMonths.some(m => m.full === full)
+            if (!alreadyFound) {
+              foundMonths.push({ abbr, full, position })
+            }
+          }
+          
+          searchPos = position + 1
+        }
+      }
+      
+      const uniqueMonths = foundMonths.filter((m, idx, arr) => 
+        arr.findIndex(x => x.full === m.full) === idx
+      )
+      uniqueMonths.sort((a, b) => a.position - b.position)
+      
+      if (uniqueMonths.length >= 2) {
+        startMonth = uniqueMonths[0].full
+        endMonth = uniqueMonths[uniqueMonths.length - 1].full
+        
+        if (monthOrder[startMonth] > monthOrder[endMonth]) {
+          const temp = startMonth
+          startMonth = endMonth
+          endMonth = temp
+        }
+      } else if (uniqueMonths.length === 1) {
+        startMonth = uniqueMonths[0].full
+        const monthIndex = lowerQuestion.indexOf(uniqueMonths[0].abbr)
+        const afterMonth = lowerQuestion.substring(monthIndex + uniqueMonths[0].abbr.length)
+        if (afterMonth.includes(' a ') || afterMonth.includes(' até ') || afterMonth.includes(' ate ')) {
+          for (const [abbr, full] of Object.entries(monthMap)) {
+            if (afterMonth.includes(abbr) && abbr !== uniqueMonths[0].abbr) {
+              const pos = afterMonth.indexOf(abbr)
+              if (isIsolatedMonth(afterMonth, abbr, pos)) {
+                endMonth = full
+                break
+              }
+            }
+          }
+        }
+      }
+      
+      // Filtra série pelo período
+      let filteredSeries = pageContext.serieOEE
+      if (startMonth && endMonth) {
+        const startIndex = filteredSeries.findIndex(m => m.name === startMonth)
+        const endIndex = filteredSeries.findIndex(m => m.name === endMonth)
+        if (startIndex >= 0 && endIndex >= 0 && startIndex <= endIndex) {
+          filteredSeries = filteredSeries.slice(startIndex, endIndex + 1)
+        }
+      }
+      
+      // Analisa a evolução
+      const indicatorLabel = targetIndicator === 'oee' ? 'OEE' :
+                            targetIndicator === 'disponibilidade' ? 'Disponibilidade' :
+                            targetIndicator === 'performance' ? 'Performance' : 'Qualidade'
+      
+      const values = filteredSeries
+        .map(m => m[targetIndicator!])
+        .filter((v): v is number => v !== undefined)
+      
+      if (values.length > 0) {
+        const firstValue = values[0]
+        const lastValue = values[values.length - 1]
+        const minValue = Math.min(...values)
+        const maxValue = Math.max(...values)
+        const avgValue = values.reduce((sum, v) => sum + v, 0) / values.length
+        const variation = ((lastValue - firstValue) / firstValue) * 100
+        
+        let periodLabel = ''
+        if (startMonth && endMonth) {
+          periodLabel = ` (${startMonth} a ${endMonth})`
+        } else if (startMonth) {
+          periodLabel = ` (a partir de ${startMonth})`
+        }
+        
+        findings.push(
+          `Evolução do ${indicatorLabel}${periodLabel}:`
+        )
+        
+        findings.push(
+          `• ${indicatorLabel} inicial (${filteredSeries[0].name}): ${formatNumber(firstValue, 1)}%`
+        )
+        findings.push(
+          `• ${indicatorLabel} final (${filteredSeries[filteredSeries.length - 1].name}): ${formatNumber(lastValue, 1)}%`
+        )
+        findings.push(
+          `• Variação no período: ${variation > 0 ? '+' : ''}${formatNumber(variation, 1)}%`
+        )
+        
+        if (filteredSeries.length > 2) {
+          findings.push(
+            `• ${indicatorLabel} médio: ${formatNumber(avgValue, 1)}%`
+          )
+          findings.push(
+            `• Menor ${indicatorLabel}: ${formatNumber(minValue, 1)}%`
+          )
+          findings.push(
+            `• Maior ${indicatorLabel}: ${formatNumber(maxValue, 1)}%`
+          )
+        }
+        
+        // Adiciona TODAS as evidências mês a mês do período
+        filteredSeries.forEach(mes => {
+          const value = mes[targetIndicator!]
+          if (value !== undefined) {
+            evidence.push({
+              metric: `${indicatorLabel} - ${mes.name}`,
+              value: `${formatNumber(value, 1)}%`,
+              source: 'serie_oee'
+            })
+          }
+        })
+        
+        if (evidence.length === 0) {
+          findings.push('Não encontrei dados para o período solicitado.')
+          limitations.push('Período sem dados disponíveis')
+        }
+        
+        if (variation > 5) {
+          recommendations.push(`O ${indicatorLabel} apresentou aumento significativo no período. Continue monitorando para identificar causas.`)
+        } else if (variation < -5) {
+          recommendations.push(`O ${indicatorLabel} apresentou redução no período. Investigue causas e implemente ações corretivas.`)
+        }
+        
+        return {
+          agent: 'producao',
+          confidence: 90,
+          findings,
+          evidence,
+          recommendations,
+          limitations: [],
+          thoughtProcess: {
+            kpiPrincipal: targetIndicator === 'oee' ? 'oee' : targetIndicator,
+            area: 'producao',
+            dataSource: 'page_context',
+            kpiConfidence: 90
+          }
+        }
+      }
+    }
+  }
+
+  // PASSO 0.3: Detecção especial de "pior linha" ANTES do scoring normal
+  if (isWorstLineQuestion(question)) {
+    const pageContext = getPageContext('producao', 'dezembro')
+    
+    if (pageContext?.rendimentoLinhas && pageContext.rendimentoLinhas.length > 0) {
+      // Filtra e pega linha com menor rendimento (pior performance)
+      const worstLine = pageContext.rendimentoLinhas
+        .sort((a, b) => a.rendimento - b.rendimento)[0]
+      
+      if (worstLine) {
+        findings.push(
+          `A linha com pior rendimento é ${worstLine.name} (${formatNumber(worstLine.rendimento, 1)}%). ` +
+          `Meta: ${formatNumber(worstLine.meta, 1)}%.`
+        )
+        evidence.push({
+          metric: `${worstLine.name} - Rendimento`,
+          value: `${formatNumber(worstLine.rendimento, 1)}%`,
+          comparison: `Meta: ${formatNumber(worstLine.meta, 1)}%`,
+          source: 'rendimento_linhas'
+        })
+        
+        if (worstLine.rendimento < worstLine.meta) {
+          recommendations.push(`Implementar ações de melhoria na ${worstLine.name} para atingir a meta de ${formatNumber(worstLine.meta, 1)}%.`)
+        }
+        
+        return {
+          agent: 'producao',
+          confidence: 85,
+          findings,
+          evidence,
+          recommendations,
+          limitations: [],
+          thoughtProcess: {
+            kpiPrincipal: 'rendimento',
+            area: 'producao',
+            dataSource: 'page_context',
+            kpiConfidence: 85
+          }
+        }
+      }
+    }
+  }
+
+  // PASSO 1: PRIMEIRO classifica KPI (usando score determinístico)
+  const scores = scoreKPIs(question)
+  const selection = selectMainKPIFromScores(scores)
+  const kpiConfidenceValue = selection.confidence
+  
+  // PASSO 2: Verifica ambiguidade real (2 KPIs competindo)
+  if (selection.isAmbiguous || !selection.kpiId) {
+    let altKpiIds = scores.slice(0, 3)
+      .map(s => s.kpiId)
+      .filter((id): id is string => !!id)
+    
+    if (altKpiIds.length === 0) {
+      // KPIs de Produção disponíveis
+      altKpiIds = ['oee', 'disponibilidade', 'performance', 'qualidade', 'rendimento', 'perdas_processo', 'producao_total', 'mtbf']
+    }
+    
+    const clarification = generateClarificationMessage(altKpiIds, question)
+    
+    const findingsList: string[] = [clarification.message]
+    
+    if (clarification.options.length > 0) {
+      findingsList.push('')
+      findingsList.push('Indicadores sugeridos:')
+      clarification.options.forEach(opt => {
+        findingsList.push(`• ${opt}`)
+      })
+    }
+    
+    return {
+      agent: 'producao',
+      confidence: 0,
+      findings: findingsList,
+      evidence: [],
+      recommendations: [],
+      limitations: ['Pergunta ambígua - precisa esclarecimento'],
+      thoughtProcess: {
+        kpiPrincipal: undefined,
+        area: 'producao',
+        dataSource: 'page_context',
+        kpiConfidence: 0
+      }
+    }
+  }
+  
+  // PASSO 3: Busca contexto da página
+  const pageContext = getPageContext('producao', 'dezembro')
+  
+  // PASSO 4: Verifica evidência mínima para o KPI selecionado
+  const evidenceCheck = checkEvidenceForKPI(selection.kpiId, pageContext)
+  
+  if (!evidenceCheck.hasMinimumEvidence) {
+    const clarification = generateClarificationMessage([selection.kpiId], question)
+    return {
+      agent: 'producao',
+      confidence: 0,
+      findings: [clarification.message],
+      evidence: [],
+      recommendations: [],
+      limitations: ['Dados insuficientes para análise'],
+      thoughtProcess: {
+        kpiPrincipal: selection.kpiId,
+        area: 'producao',
+        dataSource: 'page_context',
+        kpiConfidence: 0
+      }
+    }
+  }
+  
+  // PASSO 5: Busca dados do KPI no contexto
+  const kpi = pageContext?.kpis.find(k => k.id === selection.kpiId)
+  
+  if (!kpi) {
+    return {
+      agent: 'producao',
+      confidence: kpiConfidenceValue,
+      findings: [`Não encontrei dados para ${getKPILabel('producao', selection.kpiId)}`],
+      evidence: [],
+      recommendations: [],
+      limitations: ['KPI não encontrado no contexto'],
+      thoughtProcess: {
+        kpiPrincipal: selection.kpiId,
+        area: 'producao',
+        dataSource: 'page_context',
+        kpiConfidence: kpiConfidenceValue
+      }
+    }
+  }
+  
+  // PASSO 6: Analisa o KPI
+  const kpiValue = typeof kpi.value === 'number' ? kpi.value : 0
+  const kpiLabel = getKPILabel('producao', selection.kpiId)
+  const kpiMeta = getKPIMeta('producao', selection.kpiId)
+  
+  // Formata valor
+  const formattedValue = kpi.unit === '%' 
+    ? `${formatNumber(kpiValue, 1)}%`
+    : kpi.unit === 'R$'
+    ? formatCurrency(kpiValue)
+    : `${formatNumber(kpiValue, 0)} ${kpi.unit}`
+  
+  findings.push(`${kpiLabel}: ${formattedValue}`)
+  
+  if (kpi.change !== undefined && kpi.change !== 0) {
+    const changeText = kpi.change > 0 ? `+${formatNumber(kpi.change, 1)}%` : `${formatNumber(kpi.change, 1)}%`
+    findings.push(`Variação: ${changeText} vs período anterior.`)
+  }
+  
+  evidence.push({
+    metric: kpiLabel,
+    value: formattedValue,
+    comparison: kpi.change !== undefined && kpi.change !== 0 
+      ? `Variação: ${kpi.change > 0 ? '+' : ''}${formatNumber(kpi.change, 1)}%`
+      : undefined,
+    source: 'page_context'
+  })
+  
+  // Adiciona meta se disponível
+  if (kpiMeta !== null && kpiMeta !== undefined) {
+    const metaComparison = kpiValue >= kpiMeta ? 'Acima da meta' : 'Abaixo da meta'
     evidence.push({
-      metric: 'OEE',
-      value: `${oeeData.oee}%`,
-      comparison: 'Meta: 80%',
-      source: 'get_oee'
+      metric: `${kpiLabel} - Meta`,
+      value: `${formatNumber(kpiMeta, 1)}${kpi.unit}`,
+      comparison: metaComparison,
+      source: 'meta'
     })
     
-    if (oeeData.availability < 90) {
-      recommendations.push('Investigar paradas não programadas')
-    }
-    if (oeeData.performance < 85) {
-      recommendations.push('Otimizar velocidade de produção')
-    }
-    if (oeeData.quality < 95) {
-      recommendations.push('Revisar processos de qualidade')
+    if (kpiValue < kpiMeta) {
+      recommendations.push(`Implementar ações para atingir a meta de ${formatNumber(kpiMeta, 1)}${kpi.unit} para ${kpiLabel}.`)
     }
   }
-
-  // Analisa perdas
-  const lossesData = await DataAdapter.get_losses_by_line('dezembro')
-  const highLosses = lossesData.lines.filter(l => l.percent > 2)
-  if (highLosses.length > 0) {
-    findings.push(`${highLosses.length} linhas com perdas acima de 2%`)
-    highLosses.forEach(l => {
+  
+  // Análises específicas por KPI
+  if (selection.kpiId === 'perdas_processo' && pageContext?.perdasProducao && pageContext.perdasProducao.length > 0) {
+    const topPerdas = pageContext.perdasProducao
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 3)
+    
+    if (topPerdas.length > 0) {
+      const nomes = topPerdas.map(p => `${p.name} (${formatNumber(p.value, 0)}%)`).join(', ')
+      findings.push(`Principais tipos de perdas: ${nomes}.`)
+      
+      topPerdas.forEach(p => {
+        evidence.push({
+          metric: `Perda: ${p.name}`,
+          value: `${formatNumber(p.value, 0)}%`,
+          comparison: `${formatNumber(p.kg, 0)} kg`,
+          source: 'perdas_producao'
+        })
+      })
+      
+      recommendations.push('Investigar causas principais das perdas mais frequentes e implementar ações corretivas.')
+    }
+  }
+  
+  if (selection.kpiId === 'producao_total' && pageContext?.produtividadeTurnos && pageContext.produtividadeTurnos.length > 0) {
+    const turnos = pageContext.produtividadeTurnos
+    const totalProducao = turnos.reduce((sum, t) => sum + t.valor, 0)
+    
+    findings.push(`Produção por turno: ${turnos.map(t => `${t.name}: ${formatNumber(t.valor, 0)} kg`).join(', ')}.`)
+    
+    turnos.forEach(t => {
       evidence.push({
-        metric: `Perdas ${l.line}`,
-        value: `${l.percent}%`,
-        comparison: 'Meta: <2%',
-        source: 'get_losses_by_line'
+        metric: t.name,
+        value: `${formatNumber(t.valor, 0)} kg`,
+        comparison: `Meta: ${formatNumber(t.meta, 0)} kg | Eficiência: ${formatNumber(t.eficiencia, 1)}%`,
+        source: 'produtividade_turnos'
       })
     })
-    recommendations.push('Investigar causas principais de perdas por linha')
   }
-
+  
   return {
     agent: 'producao',
-    confidence: findings.length > 0 ? 85 : 70,
+    confidence: kpiConfidenceValue || 75,
     findings,
     evidence,
     recommendations,
-    limitations: ['Análise por linha específica']
+    limitations: [],
+    thoughtProcess: {
+      kpiPrincipal: selection.kpiId,
+      area: 'producao',
+      dataSource: 'page_context',
+      kpiConfidence: kpiConfidenceValue || 75
+    }
   }
 }
 

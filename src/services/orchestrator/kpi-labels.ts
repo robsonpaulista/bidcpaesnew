@@ -17,6 +17,18 @@ export const KPI_LABELS: Record<string, Record<string, string>> = {
     'nao_conformidades': 'Não Conformidades',
     'performance_comparativo': 'Performance Fornecedores',
     'dependencia_fornecedores': 'Dependência / Volume de Compras por Fornecedor'
+  },
+  producao: {
+    'producao_total': 'Produção Total',
+    'oee': 'OEE',
+    'disponibilidade': 'Disponibilidade',
+    'performance': 'Performance',
+    'qualidade': 'Qualidade',
+    'rendimento': 'Rendimento Médio',
+    'rendimento_medio': 'Rendimento Médio',
+    'perdas_processo': 'Perdas Processo',
+    'perdas': 'Perdas Processo',
+    'mtbf': 'MTBF'
   }
 }
 

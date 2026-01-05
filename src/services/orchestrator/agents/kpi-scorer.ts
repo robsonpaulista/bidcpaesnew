@@ -62,6 +62,52 @@ const KPI_KEYWORDS: Record<string, Array<{ keywords: string[], weight: number }>
     { keywords: ['de quais fornecedores', 'quais fornecedores', 'fornecedor que compramos', 'fornecedores que compramos'], weight: KEYWORD_WEIGHTS.primary },
     { keywords: ['mais compras', 'principal fornecedor', 'principais fornecedores', 'concentração', 'concentracao'], weight: KEYWORD_WEIGHTS.secondary },
     { keywords: ['fornecedor', 'fornecedores'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  // KPIs de Produção
+  oee: [
+    { keywords: ['oee'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['eficiência global', 'eficiencia global', 'eficiência dos equipamentos', 'eficiencia dos equipamentos'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['eficiência', 'eficiencia', 'efetividade'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao', 'linha', 'linhas'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  disponibilidade: [
+    { keywords: ['disponibilidade'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['tempo operando', 'tempo funcionando', 'uptime', 'tempo ativo'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['parada', 'paradas', 'downtime'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['máquina', 'maquina', 'equipamento', 'equipamentos'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  performance: [
+    { keywords: ['performance'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['velocidade', 'ritmo', 'cadência'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['rápido', 'rapido', 'lento', 'devagar'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao', 'linha'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  qualidade: [
+    { keywords: ['qualidade'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['produtos bons', 'produtos aprovados', 'aprovado', 'reprovado'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['defeito', 'defeitos', 'refugo', 'refugos'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao', 'linha'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  rendimento: [
+    { keywords: ['rendimento', 'rendimento médio', 'rendimento medio'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['aproveitamento', 'utilização', 'utilizacao'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['matéria-prima', 'materia-prima', 'mp'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  perdas_processo: [
+    { keywords: ['perdas processo', 'perdas de processo'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['perdas', 'perda', 'refugo', 'refugos', 'retrabalho', 'retrabalhos'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['desperdício', 'desperdicio', 'massa mole', 'massa dura', 'queimado'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['produção', 'producao', 'linha'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  producao_total: [
+    { keywords: ['produção total', 'producao total', 'volume produzido'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['volume', 'quantidade produzida', 'kg produzido'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['produção', 'producao'], weight: KEYWORD_WEIGHTS.context }
+  ],
+  mtbf: [
+    { keywords: ['mtbf', 'tempo médio entre falhas', 'tempo medio entre falhas'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['falhas', 'quebras', 'manutenção', 'manutencao'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['equipamento', 'equipamentos', 'máquina', 'maquina'], weight: KEYWORD_WEIGHTS.context }
   ]
 }
 
@@ -247,5 +293,71 @@ export function checkKnownAmbiguities(question: string): {
   }
 
   return { isAmbiguous: false }
+}
+
+/**
+ * Detecta se a pergunta é sobre OEE específico de uma linha (ex: "qual o OEE da Linha 1?")
+ * Retorna false se a pergunta menciona evolução/período/tendência (deve usar série temporal)
+ */
+export function isSpecificLineOEEQuestion(question: string): { isOEEQuestion: boolean; lineName?: string } {
+  const lowerQuestion = question.toLowerCase()
+  const oeeKeywords = ['oee', 'eficiência', 'eficiencia', 'qual o oee', 'qual a eficiência', 'qual a eficiencia']
+  const hasOEEKeyword = oeeKeywords.some(kw => lowerQuestion.includes(kw))
+  
+  if (!hasOEEKeyword) {
+    return { isOEEQuestion: false }
+  }
+  
+  // Se menciona evolução/período/tendência, NÃO é pergunta de OEE específico pontual
+  const evolutionKeywords = [
+    'evolução', 'evolucao', 'evoluir', 'evoluiu',
+    'variação', 'variacao', 'variação mensal', 'variacao mensal',
+    'tendência', 'tendencia', 'tendências', 'tendencias',
+    'período', 'periodo', 'períodos', 'periodos',
+    'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez',
+    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+    'ao longo', 'ao longo do', 'durante', 'no período', 'no periodo',
+    'histórico', 'historico', 'histórica', 'historica',
+    'série', 'serie', 'séries', 'series',
+    'gráfico', 'grafico', 'gráficos', 'graficos'
+  ]
+  
+  const hasEvolutionKeyword = evolutionKeywords.some(kw => lowerQuestion.includes(kw))
+  if (hasEvolutionKeyword) {
+    // É pergunta sobre evolução, não OEE pontual
+    return { isOEEQuestion: false }
+  }
+  
+  // Lista de linhas conhecidas
+  const knownLines = [
+    'linha 1', 'linha 2', 'linha 3', 'linha 4',
+    'linha 1 - francês', 'linha 1 - frances',
+    'linha 2 - forma',
+    'linha 3 - doces',
+    'linha 4 - especiais'
+  ]
+  
+  // Busca a primeira linha que aparece na pergunta
+  for (const line of knownLines) {
+    if (lowerQuestion.includes(line)) {
+      return { isOEEQuestion: true, lineName: line }
+    }
+  }
+  
+  return { isOEEQuestion: false }
+}
+
+/**
+ * Detecta se a pergunta é sobre "pior linha" (ranking, não total)
+ */
+export function isWorstLineQuestion(question: string): boolean {
+  const lowerQuestion = question.toLowerCase()
+  const worstKeywords = ['pior', 'qual a pior', 'menor', 'pior linha', 'linha com pior', 'vilão', 'vilao']
+  const lineKeywords = ['linha', 'linhas', 'produção', 'producao']
+  
+  const hasWorst = worstKeywords.some(kw => lowerQuestion.includes(kw))
+  const hasLine = lineKeywords.some(kw => lowerQuestion.includes(kw))
+  
+  return hasWorst && hasLine
 }
 
