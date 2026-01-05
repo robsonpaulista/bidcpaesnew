@@ -336,6 +336,7 @@ export async function agentComprasFornecedores(
   // Palavras-chave que indicam evolução/série temporal
   const evolutionKeywords = [
     'evolução', 'evolucao', 'evoluir', 'evoluiu',
+    'variação', 'variacao', 'variações', 'variacoes', 'variação mensal', 'variacao mensal',
     'tendência', 'tendencia', 'tendências', 'tendencias',
     'período', 'periodo', 'períodos', 'periodos',
     'ao longo', 'ao longo do', 'durante', 'no período', 'no periodo',
@@ -353,11 +354,16 @@ export async function agentComprasFornecedores(
   ]
   const hasMonthKeyword = monthKeywords.some(kw => {
     // Verifica se o mês está isolado (não parte de outra palavra)
+    // Usa word boundary ou verifica caracteres ao redor
+    const regex = new RegExp(`\\b${kw}\\b`, 'i')
+    if (regex.test(lowerQuestion)) return true
+    
+    // Fallback: verifica se está rodeado por espaços, pontuação ou início/fim
     const pos = lowerQuestion.indexOf(kw)
     if (pos === -1) return false
     const before = pos > 0 ? lowerQuestion[pos - 1] : ' '
     const after = pos + kw.length < lowerQuestion.length ? lowerQuestion[pos + kw.length] : ' '
-    return /[\s,.\-]/.test(before) && /[\s,.\-]/.test(after)
+    return (/[\s,.\-]/.test(before) || pos === 0) && (/[\s,.\-?]/.test(after) || pos + kw.length === lowerQuestion.length)
   })
   
   // Verifica se menciona "a" ou "até" entre meses (indica período)
@@ -444,14 +450,22 @@ export async function agentComprasFornecedores(
         
         // Função para verificar se é um mês isolado (não parte de outra palavra)
         const isIsolatedMonth = (text: string, monthAbbr: string, position: number): boolean => {
+          // Usa word boundary para verificar se está isolado
           const before = position > 0 ? text[position - 1] : ' '
           const after = position + monthAbbr.length < text.length ? text[position + monthAbbr.length] : ' '
           // Verifica se está rodeado por espaços, pontuação ou início/fim da string
-          return /[\s,.\-]/.test(before) && /[\s,.\-]/.test(after)
+          return (/[\s,.\-]/.test(before) || position === 0) && (/[\s,.\-?]/.test(after) || position + monthAbbr.length === text.length)
         }
         
         // Busca todos os meses mencionados na pergunta (apenas meses isolados)
-        for (const [abbr, full] of Object.entries(monthMap)) {
+        // Primeiro busca nomes completos (mais específicos), depois abreviações
+        const sortedMonthEntries = Object.entries(monthMap).sort((a, b) => {
+          // Nomes completos primeiro (mais longos)
+          if (a[0].length !== b[0].length) return b[0].length - a[0].length
+          return a[0].localeCompare(b[0])
+        })
+        
+        for (const [abbr, full] of sortedMonthEntries) {
           let searchPos = 0
           while (true) {
             const position = lowerQuestion.indexOf(abbr, searchPos)
@@ -459,7 +473,11 @@ export async function agentComprasFornecedores(
             
             // Verifica se é um mês isolado (não parte de outra palavra como "margarina")
             if (isIsolatedMonth(lowerQuestion, abbr, position)) {
-              foundMonths.push({ abbr, full, position })
+              // Verifica se já não foi adicionado (evita duplicatas)
+              const alreadyFound = foundMonths.some(m => m.full === full)
+              if (!alreadyFound) {
+                foundMonths.push({ abbr, full, position })
+              }
             }
             
             searchPos = position + 1

@@ -102,7 +102,73 @@ export function recoverContextFromHistory(
         // → "preço de compra da margarina"
         const lastQuestion = lastUserQuestion.content.toLowerCase()
         
-        // Extrai o padrão da pergunta anterior
+        // Detecta se a pergunta anterior era sobre evolução (variação, evolução, período, etc.)
+        const evolutionKeywords = [
+          'evolução', 'evolucao', 'variação', 'variacao', 'variação mensal', 'variacao mensal',
+          'tendência', 'tendencia', 'período', 'periodo', 'histórico', 'historico',
+          'série', 'serie', 'gráfico', 'grafico', 'me mostre', 'mostre'
+        ]
+        const hasEvolutionContext = evolutionKeywords.some(kw => lastQuestion.includes(kw))
+        
+        // Detecta período mencionado na pergunta anterior (ex: "de maio a agosto")
+        const monthKeywords = [
+          'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez',
+          'janeiro', 'fevereiro', 'março', 'marco', 'abril', 'maio', 'junho',
+          'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+        ]
+        const hasPeriod = monthKeywords.some(kw => {
+          const pos = lastQuestion.indexOf(kw)
+          if (pos === -1) return false
+          const before = pos > 0 ? lastQuestion[pos - 1] : ' '
+          const after = pos + kw.length < lastQuestion.length ? lastQuestion[pos + kw.length] : ' '
+          return /[\s,.\-]/.test(before) && /[\s,.\-]/.test(after)
+        })
+        const hasPeriodConnector = (lastQuestion.includes(' a ') || 
+                                   lastQuestion.includes(' até ') || 
+                                   lastQuestion.includes(' ate ')) && hasPeriod
+        
+        // Se a pergunta anterior era sobre evolução/período, mantém esse contexto
+        if (hasEvolutionContext || hasPeriodConnector) {
+          // Extrai período da pergunta anterior se existir
+          let periodPart = ''
+          if (hasPeriodConnector) {
+            // Tenta extrair o período (ex: "de maio a agosto" → "de maio a agosto")
+            const periodMatch = lastQuestion.match(/(de\s+[a-zç]+?\s+a\s+[a-zç]+)/i)
+            if (periodMatch) {
+              periodPart = periodMatch[1]
+            } else {
+              // Fallback: procura padrão "X a Y" onde X e Y são meses
+              const months = monthKeywords.filter(kw => {
+                const pos = lastQuestion.indexOf(kw)
+                if (pos === -1) return false
+                const before = pos > 0 ? lastQuestion[pos - 1] : ' '
+                const after = pos + kw.length < lastQuestion.length ? lastQuestion[pos + kw.length] : ' '
+                return /[\s,.\-]/.test(before) && /[\s,.\-]/.test(after)
+              })
+              if (months.length >= 2) {
+                const firstMonth = months[0]
+                const lastMonth = months[months.length - 1]
+                periodPart = `de ${firstMonth} a ${lastMonth}`
+              }
+            }
+          }
+          
+          // Reconstrói pergunta mantendo contexto de evolução
+          const artigo = extractedInput === 'margarina' || extractedInput === 'farinha' ? 'da' : 'do'
+          if (periodPart) {
+            return {
+              recoveredQuestion: `variação do preço de compra ${artigo} ${extractedInput} ${periodPart}`,
+              contextType: 'follow-up'
+            }
+          } else {
+            return {
+              recoveredQuestion: `variação do preço de compra ${artigo} ${extractedInput}`,
+              contextType: 'follow-up'
+            }
+          }
+        }
+        
+        // Extrai o padrão da pergunta anterior (preço pontual)
         if (lastQuestion.includes('preço de compra')) {
           // Ajusta artigo: "do" para masculino, "da" para feminino
           const artigo = extractedInput === 'margarina' || extractedInput === 'farinha' ? 'da' : 'do'
