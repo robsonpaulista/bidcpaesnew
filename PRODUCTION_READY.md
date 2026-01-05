@@ -200,3 +200,5 @@ const plan = getInvestigationPlan('general_overview', '...', {})
 - ✅ `src/services/orchestrator/maestro.ts` (normalização + budget)
 - ✅ `api/orchestrator/ask.ts` (rate limiting)
 
+
+

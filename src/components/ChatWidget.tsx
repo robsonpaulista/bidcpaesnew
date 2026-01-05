@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
-import { Send, Bot, X, Minimize2, Maximize2, Loader2, TrendingUp, BarChart3, Lightbulb, MessageCircle } from 'lucide-react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Send, Bot, X, Minimize2, Maximize2, Loader2, TrendingUp, BarChart3, Lightbulb, MessageCircle, Brain } from 'lucide-react'
 import { askOrchestrator } from '../services/orchestrator/api'
-import type { OrchestratorResponse, AskRequest } from '../services/orchestrator/types'
+import type { OrchestratorResponse, AskRequest, ConversationMessage } from '../services/orchestrator/types'
+import { recoverContextFromHistory } from '../services/orchestrator/context-recovery'
 import { logLLMConfig, testLLMConfiguration } from '../services/orchestrator/test-llm'
+import { getKPILabel } from '../services/orchestrator/kpi-labels'
 
 interface Message {
   id: string
@@ -30,11 +32,14 @@ const routeToArea: Record<string, string> = {
 
 const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
   const location = useLocation()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState(initialQuestion || '')
   const [loading, setLoading] = useState(false)
+  const [exploratoryMode, setExploratoryMode] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -92,10 +97,23 @@ const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
     const question = questionText || input.trim()
     if (!question || loading) return
 
+    // Prepara histórico de conversa (últimas 10 mensagens)
+    const conversationHistory: ConversationMessage[] = messages
+      .slice(-10)
+      .map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp.toISOString()
+      }))
+
+    // Recupera contexto da pergunta (follow-up ou clarificação)
+    const contextRecovery = recoverContextFromHistory(question, conversationHistory)
+    const finalQuestion = contextRecovery.recoveredQuestion
+
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
       role: 'user',
-      content: question,
+      content: question, // Mantém a pergunta original para exibição
       timestamp: new Date()
     }
 
@@ -107,10 +125,11 @@ const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
 
     try {
       const request: AskRequest = {
-        question: userMessage.content,
+        question: finalQuestion, // Usa a pergunta recuperada para processamento
         context: currentArea ? {
           area: currentArea
-        } : undefined
+        } : undefined,
+        conversationHistory
       }
 
       const response = await askOrchestrator(request)
@@ -124,6 +143,27 @@ const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
       }
 
       setMessages(prev => [...prev, assistantMessage])
+
+      // Highlight automático do KPI se disponível
+      if (response.synthesis.thoughtProcess?.kpiPrincipal && currentArea) {
+        const kpiId = response.synthesis.thoughtProcess.kpiPrincipal
+        // Navega para a página atual com focus no KPI
+        const newParams = new URLSearchParams(searchParams)
+        newParams.set('focus', kpiId)
+        setSearchParams(newParams, { replace: true })
+        
+        // Scroll para o KPI após um delay
+        setTimeout(() => {
+          const element = document.getElementById(`kpi-${kpiId}`)
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            element.classList.add('ring-2', 'ring-primary-500', 'ring-offset-2', 'rounded-2xl')
+            setTimeout(() => {
+              element.classList.remove('ring-2', 'ring-primary-500', 'ring-offset-2')
+            }, 3000)
+          }
+        }, 500)
+      }
     } catch (error) {
       console.error('❌ Erro na orquestração:', error)
       
@@ -239,30 +279,34 @@ const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
             )}
 
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-4 h-4 text-primary-600" />
-                  </div>
+              <div key={msg.id} className="space-y-2">
+                {msg.role === 'assistant' && msg.response?.synthesis.thoughtProcess && (
+                  <ThoughtProcessBanner thoughtProcess={msg.response.synthesis.thoughtProcess} area={currentArea} />
                 )}
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                    msg.role === 'user'
-                      ? 'bg-primary-500 text-white'
-                      : 'bg-white text-secondary-700 border border-slate-200'
-                  }`}
+                  className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  {msg.response && <ResponseDetails response={msg.response} />}
-                </div>
-                {msg.role === 'user' && (
-                  <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs text-secondary-600">U</span>
+                  {msg.role === 'assistant' && (
+                    <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                      <Bot className="w-4 h-4 text-primary-600" />
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                      msg.role === 'user'
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-white text-secondary-700 border border-slate-200'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {msg.response && <ResponseDetails response={msg.response} />}
                   </div>
-                )}
+                  {msg.role === 'user' && (
+                    <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs text-secondary-600">U</span>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
 
@@ -308,6 +352,44 @@ const ChatWidget = ({ initialQuestion }: ChatWidgetProps) => {
   )
 }
 
+// Componente para banner de pensamento resumido
+const ThoughtProcessBanner = ({ 
+  thoughtProcess, 
+  area 
+}: { 
+  thoughtProcess: NonNullable<OrchestratorResponse['synthesis']['thoughtProcess']>
+  area?: string
+}) => {
+  if (!thoughtProcess.kpiPrincipal || !area) return null
+
+  const kpiLabel = getKPILabel(area, thoughtProcess.kpiPrincipal)
+  const areaLabel = area.charAt(0).toUpperCase() + area.slice(1)
+  const kpiConfidence = thoughtProcess.kpiConfidence || 0
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs">
+      <div className="flex items-center gap-2 text-blue-700">
+        <Brain className="w-3.5 h-3.5" />
+        <div className="flex-1">
+          <span className="font-medium">Analisando:</span>{' '}
+          <span className="font-semibold">{areaLabel}</span>
+          {' → '}
+          <span className="font-semibold">{kpiLabel}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-blue-600">Confiança (KPI):</span>
+          <span className="font-semibold text-blue-700">{kpiConfidence}%</span>
+        </div>
+      </div>
+      {thoughtProcess.dataSource && (
+        <div className="mt-1 text-blue-600">
+          Baseado em: {thoughtProcess.dataSource === 'page_context' ? 'dados atuais da página' : thoughtProcess.dataSource}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Componente para detalhes da resposta (versão compacta)
 const ResponseDetails = ({ response }: { response: OrchestratorResponse }) => {
   return (
@@ -320,10 +402,10 @@ const ResponseDetails = ({ response }: { response: OrchestratorResponse }) => {
             <h4 className="text-xs font-semibold text-secondary-700">Principais Causas</h4>
           </div>
           <ul className="space-y-1">
-            {response.synthesis.topCauses.slice(0, 2).map((cause, idx) => (
+            {response.synthesis.topCauses.map((cause, idx) => (
               <li key={idx} className="text-xs text-secondary-600 flex items-start gap-1.5">
                 <span className="text-primary-500 text-[10px] mt-0.5">•</span>
-                <span>{cause.cause}</span>
+                <span className="whitespace-pre-wrap">{cause.cause}</span>
               </li>
             ))}
           </ul>
@@ -338,9 +420,9 @@ const ResponseDetails = ({ response }: { response: OrchestratorResponse }) => {
             <h4 className="text-xs font-semibold text-secondary-700">Evidências</h4>
           </div>
           <ul className="space-y-1">
-            {response.synthesis.numericalEvidence.slice(0, 2).map((ev, idx) => (
+            {response.synthesis.numericalEvidence.map((ev, idx) => (
               <li key={idx} className="text-xs text-secondary-600">
-                <span className="font-medium">{ev.metric}:</span> {ev.value}{ev.unit}
+                <span className="font-medium">{ev.metric}:</span> {ev.value}{ev.unit || ''}
               </li>
             ))}
           </ul>
@@ -368,7 +450,7 @@ const ResponseDetails = ({ response }: { response: OrchestratorResponse }) => {
       {/* Confiança */}
       <div className="pt-2 border-t border-slate-200">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-secondary-500">Confiança:</span>
+          <span className="text-xs text-secondary-500">Confiança (Resposta):</span>
           <span className="text-xs font-semibold text-primary-600">{response.confidence}%</span>
         </div>
       </div>

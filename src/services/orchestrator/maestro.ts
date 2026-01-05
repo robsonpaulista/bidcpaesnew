@@ -270,20 +270,83 @@ function consolidateResponses(
   // Se não há causas relevantes, usa todas (fallback)
   const relevantCauses = allCauses.length > 0 ? allCauses : agentResponses.flatMap(ar => ar.findings)
   
-  let topCauses = relevantCauses
-    .slice(0, 3)
-    .map((cause, idx) => ({
-      cause,
-      confidence: 85 - idx * 10,
-      evidence: agentResponses
-        .flatMap(ar => ar.evidence)
-        .filter(e => {
-          const eText = `${e.metric} ${e.value}`.toLowerCase()
-          return eText.includes(cause.toLowerCase().substring(0, 5)) && 
-                 isRelevantForIntention(eText, intentionDef?.id)
-        })
-        .map(e => `${e.metric}: ${e.value}`)
-    }))
+  // Detecta se é evolução de preços (série temporal) - precisa mostrar TODOS os findings
+  // Verifica nos findings primeiro
+  const isPriceEvolutionFindings = relevantCauses.some(c => 
+    c.toLowerCase().includes('evolução do preço') || 
+    c.toLowerCase().includes('evolucao do preco') ||
+    c.toLowerCase().includes('preço inicial') ||
+    c.toLowerCase().includes('preco inicial')
+  )
+  
+  // Se há mensagem de clarificação (encontra em findings), preserva ela completa
+  const clarificationFinding = relevantCauses.find(c => 
+    c.toLowerCase().includes('qual desses indicadores') || 
+    c.toLowerCase().includes('sua pergunta pode se referir') ||
+    c.toLowerCase().includes('indicadores sugeridos')
+  )
+  
+  // Se for evolução de preços, organiza melhor a distribuição:
+  // - "Principais Causas": análise resumida (título + estatísticas: inicial, final, variação, média, etc.)
+  // - "Evidências": todos os meses do período (série temporal completa)
+  let topCauses: OrchestratorResponse['synthesis']['topCauses'] = []
+  
+  if (isPriceEvolutionFindings) {
+    // Para evolução de preços, separa:
+    // - Título/Resumo: vai para "Principais Causas"
+    // - Estatísticas detalhadas: também vão para "Principais Causas"
+    // - Meses individuais: vão para "Evidências" (já estão lá)
+    const titleFinding = relevantCauses.find(c => 
+      c.toLowerCase().includes('evolução do preço') || 
+      c.toLowerCase().includes('evolucao do preco')
+    )
+    
+    const analysisFindings = relevantCauses.filter(c => {
+      const lower = c.toLowerCase()
+      // Inclui apenas estatísticas, não o título (já capturado acima)
+      return (lower.includes('preço inicial') ||
+             lower.includes('preco inicial') ||
+             lower.includes('preço final') ||
+             lower.includes('preco final') ||
+             lower.includes('variação no período') ||
+             lower.includes('variacao no periodo') ||
+             lower.includes('preço médio') ||
+             lower.includes('preco medio') ||
+             lower.includes('menor preço') ||
+             lower.includes('menor preco') ||
+             lower.includes('maior preço') ||
+             lower.includes('maior preco')) &&
+             !lower.includes('evolução do preço') &&
+             !lower.includes('evolucao do preco')
+    })
+    
+    // Agrupa título + estatísticas em uma única causa principal
+    const allAnalysisParts = [titleFinding, ...analysisFindings].filter(Boolean)
+    
+    if (allAnalysisParts.length > 0) {
+      topCauses = [{
+        cause: allAnalysisParts.join('\n'),
+        confidence: 90,
+        evidence: [] // Evidências (meses) vão para a seção de evidências
+      }]
+    }
+  } else {
+    // Para outros casos, mantém o comportamento original (limita a 3)
+    topCauses = relevantCauses
+      .slice(0, 3)
+      .map((cause, idx) => ({
+        cause,
+        confidence: 85 - idx * 10,
+        evidence: agentResponses
+          .flatMap(ar => ar.evidence)
+          .filter(e => {
+            const eText = `${e.metric} ${e.value}`.toLowerCase()
+            return eText.includes(cause.toLowerCase().substring(0, 5)) && 
+                   isRelevantForIntention(eText, intentionDef?.id)
+          })
+          .map(e => `${e.metric}: ${e.value}`)
+      }))
+  }
 
   // Extrai evidências numéricas, priorizando as relevantes à intenção
   const allEvidence = agentResponses.flatMap(ar => ar.evidence)
@@ -292,11 +355,25 @@ function consolidateResponses(
     return isRelevantForIntention(eText, intentionDef?.id)
   })
   
+  // Detecta se é evolução de preços (série temporal) - precisa mostrar TODAS as evidências
+  // Verifica tanto nas evidências quanto nos findings (usa a detecção já feita acima)
+  const isPriceEvolutionEvidence = allEvidence.some(e => 
+    e.source === 'serie_precos' || 
+    (e.metric && /(farinha|margarina|fermento).*-(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/i.test(e.metric))
+  )
+  
+  // Combina ambas as detecções (findings ou evidências)
+  const isPriceEvolution = isPriceEvolutionFindings || isPriceEvolutionEvidence
+  
+  // Se for evolução de preços, mostra TODAS as evidências do período (sem limite)
+  // Caso contrário, limita a 5 para evitar sobrecarga
+  const evidenceLimit = isPriceEvolution ? allEvidence.length : 5
+  
   // Prioriza evidências relevantes, depois adiciona outras se necessário
   const prioritizedEvidence = [
     ...relevantEvidence,
     ...allEvidence.filter(e => !relevantEvidence.includes(e))
-  ].slice(0, 5)
+  ].slice(0, evidenceLimit)
     .map(e => ({
       metric: e.metric,
       value: e.value,
@@ -304,14 +381,20 @@ function consolidateResponses(
       context: e.comparison || 'Dados do período'
     }))
 
-  // VALIDAÇÃO DE EVIDÊNCIA MÍNIMA: Não retorna causas se não houver evidências suficientes
-  const MIN_EVIDENCE_REQUIRED = 2
-  const hasMinimumEvidence = prioritizedEvidence.length >= MIN_EVIDENCE_REQUIRED
+  // VALIDAÇÃO DE EVIDÊNCIA MÍNIMA: Verifica se há dados suficientes para resposta
+  // Se há topCauses ou evidências, sempre considera que há dados válidos
+  // A validação só aplica quando NÃO há causas E não há evidências
+  const MIN_EVIDENCE_REQUIRED = 1 // Mínimo: pelo menos 1 evidência
+  const hasMinimumEvidence = 
+    topCauses.length > 0 || // Se há causas, tem dados
+    prioritizedEvidence.length >= MIN_EVIDENCE_REQUIRED || // Ou se há evidências suficientes
+    allEvidence.length >= MIN_EVIDENCE_REQUIRED // Ou se o agente retornou evidências
   
-  // Se intenção genérica e não há evidências suficientes, ajusta resposta
-  if (intentionDef && isGenericIntention(intentionDef.id) && !hasMinimumEvidence) {
-    // Limita causas e adiciona limitação
-    if (topCauses.length > 0 && prioritizedEvidence.length < MIN_EVIDENCE_REQUIRED) {
+  // Se não há evidências E não há causas, limpa causas para evitar respostas vazias
+  if (!hasMinimumEvidence && topCauses.length > 0) {
+    // Só limpa se realmente não há evidências (caso raro onde há findings mas sem evidence)
+    const hasAnyEvidence = allEvidence.length > 0
+    if (!hasAnyEvidence) {
       topCauses = [] // Não inventa causas sem evidência
     }
   }
@@ -348,8 +431,8 @@ function consolidateResponses(
     .flatMap(ar => ar.limitations || [])
     .filter((v, i, a) => a.indexOf(v) === i)
 
-  // Adiciona limitação se não há evidências suficientes
-  if (!hasMinimumEvidence) {
+  // Adiciona limitação se não há evidências suficientes (só se não há dados mesmo)
+  if (!hasMinimumEvidence && topCauses.length === 0 && prioritizedEvidence.length === 0) {
     dataLimitations.push('Evidências numéricas insuficientes para conclusão definitiva')
   }
 
@@ -363,8 +446,17 @@ function consolidateResponses(
     dataLimitations.push('Confiança baixa no mapeamento da intenção. Considere ser mais específico na pergunta.')
   }
 
-  // Síntese executiva
-  const executive = generateExecutiveSummary(question, topCauses, prioritizedEvidence, intentionDef, hasMinimumEvidence)
+  // Síntese executiva (passa findings do agente para detectar mensagens de clarificação)
+  const allAgentFindings = agentResponses.flatMap(ar => ar.findings)
+  const executive = generateExecutiveSummary(question, topCauses, prioritizedEvidence, intentionDef, hasMinimumEvidence, allAgentFindings)
+
+  // Extrai informações de pensamento do primeiro agente (se disponível)
+  const thoughtProcess = agentResponses[0]?.thoughtProcess ? {
+    kpiPrincipal: agentResponses[0].thoughtProcess.kpiPrincipal,
+    area: agentResponses[0].thoughtProcess.area || fullContext?.area as string,
+    dataSource: agentResponses[0].thoughtProcess.dataSource,
+    kpiConfidence: agentResponses[0].thoughtProcess.kpiConfidence
+  } : undefined
 
   return {
     executive,
@@ -372,7 +464,8 @@ function consolidateResponses(
     numericalEvidence: prioritizedEvidence,
     suggestedActions: prioritizedActions,
     validationLinks,
-    dataLimitations
+    dataLimitations,
+    thoughtProcess
   }
 }
 
@@ -408,17 +501,62 @@ function generateExecutiveSummary(
   topCauses: OrchestratorResponse['synthesis']['topCauses'],
   evidence: OrchestratorResponse['synthesis']['numericalEvidence'],
   intentionDef?: typeof intentions[BusinessIntention],
-  hasMinimumEvidence: boolean = true
+  hasMinimumEvidence: boolean = true,
+  agentFindings?: string[]
 ): string {
-  // Se não há evidências suficientes, retorna mensagem apropriada
-  if (!hasMinimumEvidence) {
+  // Se há mensagem de clarificação nos findings do agente, usa ela (junta todas as linhas)
+  if (agentFindings && agentFindings.length > 0) {
+    const clarificationMsg = agentFindings.find(f => 
+      f.toLowerCase().includes('qual desses indicadores') || 
+      f.toLowerCase().includes('sua pergunta pode se referir') ||
+      f.toLowerCase().includes('indicadores sugeridos') ||
+      f.toLowerCase().includes('você quer saber sobre')
+    )
+    
+    if (clarificationMsg || agentFindings.some(f => f.toLowerCase().includes('indicadores sugeridos'))) {
+      // Junta todos os findings em uma única string (mantém quebras de linha)
+      return agentFindings.filter(f => f.trim()).join('\n')
+    }
+  }
+  
+  // Se não há evidências E não há causas, retorna mensagem apropriada
+  // Mas se há causas OU evidências, sempre gera resumo (mesmo que evidências < 2)
+  if (!hasMinimumEvidence && topCauses.length === 0 && evidence.length === 0) {
     return `Análise preliminar da questão "${question}" não identificou evidências numéricas suficientes para determinar causas. Considere ser mais específico na pergunta ou fornecer mais contexto.`
+  }
+
+  if (topCauses.length === 0 && evidence.length > 0) {
+    // Há evidências mas não causas - gera resumo baseado nas evidências
+    const mainEvidence = evidence[0]
+    return `Análise da questão "${question}": ${mainEvidence.metric} ${mainEvidence.value}${mainEvidence.unit || ''}.`
   }
 
   if (topCauses.length === 0) {
     return `Análise da questão "${question}" não identificou desvios significativos nos indicadores analisados.`
   }
 
+  // Se for evolução de preços, gera um resumo executivo conciso
+  // (não duplica o conteúdo que já está em topCauses)
+  const isPriceEvolutionSummary = topCauses.some(c => 
+    c.cause.toLowerCase().includes('evolução do preço') || 
+    c.cause.toLowerCase().includes('evolucao do preco')
+  )
+  
+  if (isPriceEvolutionSummary && topCauses.length > 0 && evidence.length > 0) {
+    // Gera um resumo executivo padrão, sem duplicar o conteúdo detalhado
+    const mainCause = topCauses[0]
+    const firstEvidence = evidence[0]
+    const lastEvidence = evidence[evidence.length - 1]
+    
+    // Extrai o nome do insumo e período do título
+    const titleMatch = mainCause.cause.match(/Evolução do preço de compra de (\w+).*?\(([^)]+)\)/)
+    const inputName = titleMatch ? titleMatch[1] : 'insumo'
+    const period = titleMatch ? titleMatch[2] : ''
+    
+    // Gera resumo executivo padrão
+    return `Análise identificou ${topCauses.length} causa${topCauses.length > 1 ? 's' : ''} principal${topCauses.length > 1 ? 'is' : ''}. Evolução do preço de compra de ${inputName}${period ? ` (${period})` : ''}. Evidência: ${firstEvidence.metric} ${firstEvidence.value}${firstEvidence.unit || ''}.`
+  }
+  
   const mainCause = topCauses[0]
   const mainEvidence = evidence[0]
   

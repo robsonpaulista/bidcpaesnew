@@ -127,3 +127,5 @@ No Supabase Dashboard → Table Editor:
 3. Adicionar índices adicionais conforme uso
 4. Configurar backups automáticos
 
+
+

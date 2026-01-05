@@ -12,12 +12,13 @@ export interface KPIMapping {
 // Mapeamento por área
 export const KPI_MAPPINGS: Record<string, KPIMapping[]> = {
   compras: [
-    { keywords: ['otd', 'on time delivery', 'entrega no prazo', 'fornecedor'], kpiId: 'otd', kpiLabel: 'OTD Fornecedores' },
+    { keywords: ['lead time', 'tempo médio de entrega', 'tempo de entrega', 'tempo entre pedido e entrega', 'tempo médio entrega'], kpiId: 'lead_time', kpiLabel: 'Lead Time Médio' },
+    { keywords: ['otd', 'on time delivery', 'percentual de entregas no prazo'], kpiId: 'otd', kpiLabel: 'OTD Fornecedores' },
     { keywords: ['fill rate', 'taxa de atendimento', 'atendimento'], kpiId: 'fill_rate', kpiLabel: 'Fill Rate' },
-    { keywords: ['lead time', 'tempo de entrega', 'prazo'], kpiId: 'lead_time', kpiLabel: 'Lead Time Médio' },
-    { keywords: ['custo mp', 'custo matéria-prima', 'custo materia-prima', 'custo de matéria-prima'], kpiId: 'custo_mp', kpiLabel: 'Custo Total MP' },
-    { keywords: ['cobertura', 'estoque mp', 'estoque matéria-prima'], kpiId: 'cobertura', kpiLabel: 'Cobertura Estoque MP' },
-    { keywords: ['não conformidade', 'nao conformidade', 'qualidade', 'conformidade'], kpiId: 'nao_conformidades', kpiLabel: 'Não Conformidades' },
+    { keywords: ['custo mp', 'custo matéria-prima', 'custo materia-prima', 'custo de matéria-prima', 'custo total mp'], kpiId: 'custo_mp', kpiLabel: 'Custo Total MP' },
+    { keywords: ['cobertura', 'cobertura estoque', 'cobertura estoque mp', 'cobertura estoque matéria-prima', 'dias de estoque'], kpiId: 'cobertura', kpiLabel: 'Cobertura Estoque MP' },
+    { keywords: ['não conformidade', 'nao conformidade', 'não conformidades', 'nao conformidades', 'problemas de qualidade'], kpiId: 'nao_conformidades', kpiLabel: 'Não Conformidades' },
+    { keywords: ['performance fornecedores comparativo', 'performance fornecedores comparativo por indicador', 'comparativo fornecedores', 'fornecedores comparativo'], kpiId: 'performance_comparativo', kpiLabel: 'Performance Fornecedores Comparativo' },
     { keywords: ['performance', 'fornecedor', 'fornecedores'], kpiId: 'performance', kpiLabel: 'Performance de Fornecedores' },
   ],
   comercial: [

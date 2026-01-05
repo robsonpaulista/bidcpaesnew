@@ -213,3 +213,5 @@ UPSTASH_REDIS_REST_TOKEN=AXxxxxxxx
 - Configure `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`
 - Sem isso, usa fallback em memória (funciona, mas não persiste entre deploys)
 
+
+

@@ -188,3 +188,5 @@ Antes de fazer deploy:
 - [Supabase Security](https://supabase.com/docs/guides/auth/row-level-security)
 - [Vercel Environment Variables](https://vercel.com/docs/concepts/projects/environment-variables)
 
+
+

@@ -585,6 +585,29 @@ export async function get_raw_material_seasonality(period: string): Promise<RawM
   }
 }
 
+export async function get_supplier_performance(period: string): Promise<{
+  period: string
+  suppliers: Array<{
+    name: string
+    otd: number
+    fillRate: number
+    quality: number
+    dependencia: number
+  }>
+}> {
+  await new Promise(resolve => setTimeout(resolve, 300))
+  
+  const suppliers = performanceFornecedores.map(supplier => ({
+    name: supplier.name as string,
+    otd: typeof supplier.otd === 'number' ? supplier.otd : 0,
+    fillRate: typeof supplier.fillRate === 'number' ? supplier.fillRate : 0,
+    quality: typeof supplier.qualidade === 'number' ? supplier.qualidade : 0,
+    dependencia: typeof supplier.dependencia === 'number' ? supplier.dependencia : 0
+  }))
+  
+  return { period, suppliers }
+}
+
 export async function get_customers_by_billing_range(period: string): Promise<{
   period: string
   ranges: Array<{
@@ -615,6 +638,7 @@ export const DataAdapter = {
   get_losses_by_line,
   get_oee,
   get_supplier_variation,
+  get_supplier_performance,
   get_stock_coverage,
   get_otif,
   get_sales_mix,

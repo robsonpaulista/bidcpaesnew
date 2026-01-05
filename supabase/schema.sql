@@ -198,3 +198,5 @@ CREATE TRIGGER update_cases_updated_at
 -- CREATE POLICY "Allow read access" ON alerts FOR SELECT USING (true);
 -- CREATE POLICY "Allow service role write" ON alerts FOR ALL USING (auth.role() = 'service_role');
 
+
+

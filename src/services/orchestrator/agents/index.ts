@@ -79,6 +79,160 @@ export async function agentCustosMargem(
 // AGENTE: COMPRAS & FORNECEDORES
 // ==========================================
 
+import { getPageContext } from '../page-context.js'
+import { scoreKPIs, selectMainKPIFromScores, checkKnownAmbiguities, isWorstInputQuestion, isSpecificInputPriceQuestion } from './kpi-scorer.js'
+import { checkEvidenceForKPI, generateClarificationMessage } from './evidence-checker.js'
+import { getKPILabel } from '../kpi-labels.js'
+import { formatCurrency, formatValueWithUnit, formatNumber } from '../utils/format.js'
+import { getKPIMeta } from '../utils/kpi-metas.js'
+
+// Catálogo fechado de KPIs (seguindo prompt estruturado)
+const KPI_CATALOG_IDS: Record<string, string> = {
+  'custo_total_mp': 'custo_mp',
+  'otd_fornecedores': 'otd',
+  'fill_rate': 'fill_rate',
+  'lead_time_medio': 'lead_time',
+  'cobertura_estoque_mp': 'cobertura',
+  'nao_conformidades': 'nao_conformidades',
+  'dependencia_fornecedores': 'dependencia_fornecedores'
+}
+
+// DEPRECATED - mantido apenas para compatibilidade
+function selectMainKPIFromQuestion(question: string): { kpiId: string | null; needsClarification: boolean } {
+  const lowerQuestion = question.toLowerCase()
+  
+  // Detecção de ambiguidades (regra anti-confusão)
+  const hasEntrega = lowerQuestion.includes('entrega')
+  const hasCompleto = lowerQuestion.includes('completo') || lowerQuestion.includes('faltou') || lowerQuestion.includes('corte')
+  const hasPrazo = lowerQuestion.includes('prazo') || lowerQuestion.includes('pontualidade') || lowerQuestion.includes('atraso')
+  const hasTempoEntrega = (lowerQuestion.includes('tempo') && lowerQuestion.includes('entrega')) || 
+                          lowerQuestion.includes('lead time') || lowerQuestion.includes('demora')
+  
+  // Ambiguidade: entrega + completo
+  if (hasEntrega && hasCompleto) {
+    return { kpiId: null, needsClarification: true }
+  }
+  
+  // Ambiguidade: prazo + tempo (distinguir OTD vs Lead Time)
+  if (hasPrazo && hasTempoEntrega) {
+    if (lowerQuestion.includes('no prazo') || lowerQuestion.includes('pontualidade')) {
+      return { kpiId: 'otd_fornecedores', needsClarification: false }
+    }
+    if (lowerQuestion.includes('quantos dias') || lowerQuestion.includes('tempo entre')) {
+      return { kpiId: 'lead_time_medio', needsClarification: false }
+    }
+    return { kpiId: null, needsClarification: true }
+  }
+  
+  // Regras de seleção (ordem de prioridade conforme prompt)
+  
+  // 1. OTD Fornecedores
+  if (lowerQuestion.includes('prazo') || lowerQuestion.includes('pontualidade') || 
+      lowerQuestion.includes('atraso') || lowerQuestion.includes('otd') ||
+      (lowerQuestion.includes('entrega') && lowerQuestion.includes('no prazo'))) {
+    return { kpiId: 'otd_fornecedores', needsClarification: false }
+  }
+  
+  // 2. Fill Rate
+  if (lowerQuestion.includes('pedido incompleto') || lowerQuestion.includes('faltou') ||
+      lowerQuestion.includes('corte') || lowerQuestion.includes('atendido parcialmente') ||
+      lowerQuestion.includes('fill rate') || (lowerQuestion.includes('pedido') && hasCompleto)) {
+    return { kpiId: 'fill_rate', needsClarification: false }
+  }
+  
+  // 3. Lead Time Médio
+  if (lowerQuestion.includes('tempo entre pedido e entrega') || lowerQuestion.includes('demora') ||
+      lowerQuestion.includes('lead time') || lowerQuestion.includes('prazo médio') ||
+      (lowerQuestion.includes('tempo') && lowerQuestion.includes('entrega') && !lowerQuestion.includes('no prazo'))) {
+    return { kpiId: 'lead_time_medio', needsClarification: false }
+  }
+  
+  // 4. Não Conformidades
+  if (lowerQuestion.includes('qualidade') || lowerQuestion.includes('não conformidade') ||
+      lowerQuestion.includes('problema') || lowerQuestion.includes('defeito') ||
+      lowerQuestion.includes('reclamação')) {
+    return { kpiId: 'nao_conformidades', needsClarification: false }
+  }
+  
+  // 5. Custo Total MP
+  if (lowerQuestion.includes('custo total') || lowerQuestion.includes('gasto total') ||
+      lowerQuestion.includes('valor gasto com mp') || lowerQuestion.includes('custo mp') ||
+      (lowerQuestion.includes('custo') && lowerQuestion.includes('matéria-prima'))) {
+    return { kpiId: 'custo_total_mp', needsClarification: false }
+  }
+  
+  // 6. Cobertura Estoque MP
+  if (lowerQuestion.includes('dias de estoque') || lowerQuestion.includes('cobertura') ||
+      lowerQuestion.includes('quanto dura') || lowerQuestion.includes('estoque disponível')) {
+    return { kpiId: 'cobertura_estoque_mp', needsClarification: false }
+  }
+  
+  // Performance comparativo (dados de ranking)
+  if (lowerQuestion.includes('performance fornecedores comparativo') ||
+      (lowerQuestion.includes('performance fornecedores') && lowerQuestion.includes('comparativo')) ||
+      (lowerQuestion.includes('comparativo') && lowerQuestion.includes('fornecedor'))) {
+    return { kpiId: 'performance_comparativo', needsClarification: false }
+  }
+  
+  // Não identificado
+  return { kpiId: null, needsClarification: true }
+}
+
+/**
+ * Filtra "Outros" de uma lista, retornando itens válidos e flag se tinha "Outros"
+ */
+function filterOthers<T extends { name: string }>(items: T[]): { valid: T[]; hadOthers: boolean } {
+  const valid = items.filter(item => item.name.toLowerCase() !== 'outros')
+  const hadOthers = items.length !== valid.length
+  return { valid, hadOthers }
+}
+
+/**
+ * Formata mensagem de evidência com meta e delta
+ */
+function formatEvidenceMessage(
+  value: number,
+  unit: string,
+  change?: number,
+  meta?: number | null,
+  kpiId?: string
+): { value: string; comparison?: string } {
+  const isCurrency = unit === 'R$'
+  const formattedValue = isCurrency 
+    ? formatCurrency(value) 
+    : formatValueWithUnit(value, unit, false)
+  
+  const parts: string[] = []
+  
+  // Adiciona meta se disponível
+  if (meta !== null && meta !== undefined && meta > 0) {
+    const isBetter = (kpiId === 'otd_fornecedores' || kpiId === 'fill_rate') 
+      ? value >= meta 
+      : (kpiId === 'nao_conformidades' || kpiId?.includes('lead_time'))
+      ? value <= meta
+      : null
+    
+    if (isBetter !== null) {
+      const metaText = isCurrency ? formatCurrency(meta) : `${formatNumber(meta, unit === '%' ? 0 : 1)}${unit}`
+      parts.push(`meta ${metaText}`)
+      if (!isBetter) {
+        parts[parts.length - 1] = `abaixo da ${parts[parts.length - 1]}`
+      }
+    }
+  }
+  
+  // Adiciona delta (variação vs período anterior)
+  if (change !== undefined && change !== null) {
+    const deltaText = change > 0 ? `+${formatNumber(change, 1)}pp` : `${formatNumber(change, 1)}pp`
+    parts.push(`delta ${deltaText} vs período anterior`)
+  }
+  
+  return {
+    value: formattedValue,
+    comparison: parts.length > 0 ? parts.join(', ') : undefined
+  }
+}
+
 export async function agentComprasFornecedores(
   question: string,
   context?: Record<string, unknown>
@@ -86,231 +240,716 @@ export async function agentComprasFornecedores(
   const findings: string[] = []
   const evidence: AgentResponse['evidence'] = []
   const recommendations: string[] = []
+  const kpiConfidence = 0 // Será calculado
 
-  // SEMPRE busca KPIs da área de compras
-  const kpisData = await DataAdapter.get_kpis_overview('dezembro', 'compras')
-  const allKPIs = kpisData.kpis || []
-  
-  // Mapeia perguntas para KPIs específicos
-  const mappedKPIs = mapQuestionToKPIs(question, 'compras')
+  // PASSO 0.1: Detecção especial de preço específico de insumo (ex: "preço de compra do Leite")
+  const priceQuestionCheck = isSpecificInputPriceQuestion(question)
+  if (priceQuestionCheck.isPriceQuestion && priceQuestionCheck.inputName) {
+    const pageContext = getPageContext('compras', 'dezembro')
+    
+    if (pageContext?.tabelaPrecos && pageContext.tabelaPrecos.length > 0) {
+      // Normaliza nome do insumo para busca (remove acentos, lowercase)
+      const normalizedInputName = priceQuestionCheck.inputName.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      
+      // Busca o insumo na tabela (busca parcial e normalizada)
+      const inputPrice = pageContext.tabelaPrecos.find(mp => {
+        const normalizedMpName = mp.name.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        return normalizedMpName.includes(normalizedInputName) || normalizedInputName.includes(normalizedMpName.split(' ')[0])
+      })
+      
+      if (inputPrice) {
+        const formattedPrice = formatValueWithUnit(inputPrice.value, inputPrice.unidade, true)
+        findings.push(
+          `Preço de compra de ${inputPrice.name}: ${formattedPrice}.`
+        )
+        
+        if (inputPrice.variacao !== 0) {
+          const variacaoText = inputPrice.variacao > 0 ? `+${formatNumber(inputPrice.variacao, 1)}%` : `${formatNumber(inputPrice.variacao, 1)}%`
+          findings.push(`Variação: ${variacaoText} vs período anterior.`)
+          evidence.push({
+            metric: `${inputPrice.name} - Preço`,
+            value: formattedPrice,
+            comparison: `Variação: ${variacaoText}`,
+            source: 'tabela'
+          })
+        } else {
+          evidence.push({
+            metric: `${inputPrice.name} - Preço`,
+            value: formattedPrice,
+            comparison: 'Sem variação',
+            source: 'tabela'
+          })
+        }
+        
+        const finalConfidence = 90
+        
+        return {
+          agent: 'compras_fornecedores',
+          confidence: finalConfidence,
+          findings,
+          evidence,
+          recommendations,
+          limitations: [],
+          thoughtProcess: {
+            kpiPrincipal: undefined, // Não é um KPI, é consulta específica
+            area: 'compras',
+            dataSource: 'tabela',
+            kpiConfidence: 95
+          }
+        }
+      } else {
+        return {
+          agent: 'compras_fornecedores',
+          confidence: 0,
+          findings: [
+            `Não encontrei o preço de "${priceQuestionCheck.inputName}" na tabela de insumos.`,
+            'Verifique se o nome do insumo está correto ou consulte a tabela completa.'
+          ],
+          evidence: [],
+          recommendations: [],
+          limitations: ['Insumo não encontrado na tabela']
+        }
+      }
+    }
+    
+    // Se não tem dados, informa
+    return {
+      agent: 'compras_fornecedores',
+      confidence: 0,
+      findings: [
+        'Não consegui ler os dados de preços de insumos da página agora.',
+        'Você está com o painel de Compras carregado?'
+      ],
+      evidence: [],
+      recommendations: [],
+      limitations: ['Dados não disponíveis no contexto da página']
+    }
+  }
+
+  // PASSO 0.2: Detecção especial de evolução de preços
+  // Detecta quando a pergunta pede preços de um insumo específico em um período
   const lowerQuestion = question.toLowerCase()
   
-  // Casos especiais que não são KPIs diretos
-  const isPerformanceQuestion = mappedKPIs.some(m => m.kpiId === 'performance') || 
-                                lowerQuestion.includes('performance') && lowerQuestion.includes('fornecedor')
+  // Palavras-chave que indicam evolução/série temporal
+  const evolutionKeywords = [
+    'evolução', 'evolucao', 'evoluir', 'evoluiu',
+    'tendência', 'tendencia', 'tendências', 'tendencias',
+    'período', 'periodo', 'períodos', 'periodos',
+    'ao longo', 'ao longo do', 'durante', 'no período', 'no periodo',
+    'histórico', 'historico', 'histórica', 'historica',
+    'série', 'serie', 'séries', 'series',
+    'gráfico', 'grafico', 'gráficos', 'graficos',
+    'me mostre', 'mostre', 'mostrar', 'mostrar os', 'mostrar as'
+  ]
   
-  // Se mapeou para KPIs específicos (exceto casos especiais), retorna esses KPIs
-  if (mappedKPIs.length > 0 && !isPerformanceQuestion) {
-    for (const mapped of mappedKPIs) {
-      const kpi = allKPIs.find(k => k.id === mapped.kpiId)
-      if (kpi) {
-        findings.push(`${mapped.kpiLabel}: ${kpi.value}${kpi.unit || ''}`)
-        evidence.push({
-          metric: mapped.kpiLabel,
-          value: `${kpi.value}${kpi.unit || ''}`,
-          comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
-          source: 'get_kpis_overview'
-        })
-      }
-    }
-  }
-  const isSeasonalityQuestion = lowerQuestion.includes('sazonalidade') ||
-                                lowerQuestion.includes('sazonal') ||
-                                lowerQuestion.includes('padrão') ||
-                                lowerQuestion.includes('padrao') ||
-                                context?.intention === 'analyze_supplier_performance'
-
-  // Se pergunta sobre sazonalidade de compras/matérias-primas
-  if (isSeasonalityQuestion && (lowerQuestion.includes('compra') || 
-                                lowerQuestion.includes('matéria') || 
-                                lowerQuestion.includes('materia') ||
-                                lowerQuestion.includes('matéria-prima') ||
-                                lowerQuestion.includes('materia-prima'))) {
-    const seasonalityData = await DataAdapter.get_raw_material_seasonality('dezembro')
+  // Verifica se menciona período (meses)
+  const monthKeywords = [
+    'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez',
+    'janeiro', 'fevereiro', 'março', 'marco', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+  ]
+  const hasMonthKeyword = monthKeywords.some(kw => {
+    // Verifica se o mês está isolado (não parte de outra palavra)
+    const pos = lowerQuestion.indexOf(kw)
+    if (pos === -1) return false
+    const before = pos > 0 ? lowerQuestion[pos - 1] : ' '
+    const after = pos + kw.length < lowerQuestion.length ? lowerQuestion[pos + kw.length] : ' '
+    return /[\s,.\-]/.test(before) && /[\s,.\-]/.test(after)
+  })
+  
+  // Verifica se menciona "a" ou "até" entre meses (indica período)
+  const hasPeriodConnector = (lowerQuestion.includes(' a ') || 
+                              lowerQuestion.includes(' até ') || 
+                              lowerQuestion.includes(' ate ')) && hasMonthKeyword
+  
+  // Normaliza a pergunta para busca sem acentos
+  const normalizedQuestion = lowerQuestion.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  
+  const hasEvolutionKeyword = evolutionKeywords.some(kw => {
+    const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return normalizedQuestion.includes(normalizedKw)
+  })
+  
+  // Detecta "preço" ou "preços" (singular e plural)
+  // Busca por "pre" seguido de caracteres até "os" (captura "preços" mesmo com encoding diferente)
+  const hasPriceKeyword = /pre.*?os/i.test(lowerQuestion) || 
+                          lowerQuestion.includes('preço') || 
+                          lowerQuestion.includes('preco') || 
+                          lowerQuestion.includes('preços') || 
+                          lowerQuestion.includes('precos') ||
+                          normalizedQuestion.includes('preco') || 
+                          normalizedQuestion.includes('precos')
+  
+  const hasInputKeyword = ['farinha', 'margarina', 'fermento', 'açúcar', 'acucar', 'leite', 'ovos', 'sal'].some(kw => {
+    const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return normalizedQuestion.includes(normalizedKw)
+  })
+  
+  // Detecta evolução se:
+  // 1. Tem palavra-chave explícita de evolução + preço + insumo, OU
+  // 2. Tem período (meses) + preço + insumo (mesmo sem palavra "evolução")
+  const isEvolutionQuestion = (hasEvolutionKeyword && hasPriceKeyword && hasInputKeyword) ||
+                              (hasMonthKeyword && hasPeriodConnector && hasPriceKeyword && hasInputKeyword)
+  
+  if (isEvolutionQuestion) {
+    const pageContext = getPageContext('compras', 'dezembro')
     
-    // Análise geral de sazonalidade
-    if (seasonalityData.overall.averageOscillation > 10) {
-      findings.push(`Padrão sazonal moderado detectado: oscilação média de ${seasonalityData.overall.averageOscillation.toFixed(1)}% nos preços de matérias-primas`)
-    } else {
-      findings.push(`Padrão sazonal fraco: oscilação média de ${seasonalityData.overall.averageOscillation.toFixed(1)}% (variação entre trimestres abaixo de 10%)`)
-    }
-    
-    findings.push(`Matéria-prima mais volátil: ${seasonalityData.overall.mostVolatile.name} (${seasonalityData.overall.mostVolatile.oscillation.toFixed(1)}% de oscilação)`)
-    findings.push(`Matéria-prima mais estável: ${seasonalityData.overall.mostStable.name} (${seasonalityData.overall.mostStable.oscillation.toFixed(1)}% de oscilação)`)
-    
-    // Detalhamento por matéria-prima
-    seasonalityData.materials.forEach(mat => {
-      evidence.push({
-        metric: `${mat.name} - Oscilação`,
-        value: `${mat.summary.oscillation.toFixed(1)}%`,
-        comparison: `Melhor mês: ${mat.summary.bestMonth.month} (R$ ${mat.summary.bestMonth.price.toFixed(2)}), Pior: ${mat.summary.worstMonth.month} (R$ ${mat.summary.worstMonth.price.toFixed(2)})`,
-        source: 'get_raw_material_seasonality'
-      })
-    })
-    
-    // Análise por trimestre (agrupa meses)
-    seasonalityData.materials.forEach(mat => {
-      const quarters: Record<string, number[]> = {
-        'Q1': [],
-        'Q2': [],
-        'Q3': [],
-        'Q4': []
+    if (pageContext?.seriePrecos && pageContext.seriePrecos.length > 0) {
+      // Extrai o insumo mencionado
+      let targetInput: string | null = null
+      const inputMap: Record<string, string> = {
+        'farinha': 'farinha',
+        'margarina': 'margarina',
+        'fermento': 'fermento',
+        'açúcar': 'farinha', // Não tem açúcar na série, usa farinha como fallback
+        'acucar': 'farinha',
+        'leite': 'farinha', // Não tem leite na série
+        'ovos': 'farinha', // Não tem ovos na série
+        'sal': 'farinha' // Não tem sal na série
       }
       
-      mat.months.forEach((m, index) => {
-        const quarter = Math.floor(index / 3)
-        const quarterKey = `Q${quarter + 1}`
-        if (quarters[quarterKey]) {
-          quarters[quarterKey].push(m.price)
+      for (const [input, serieKey] of Object.entries(inputMap)) {
+        if (lowerQuestion.includes(input)) {
+          targetInput = serieKey
+          break
         }
-      })
-      
-      const quarterAverages = Object.entries(quarters).map(([q, prices]) => ({
-        quarter: q,
-        average: prices.reduce((sum, p) => sum + p, 0) / prices.length
-      }))
-      
-      const avgAll = quarterAverages.reduce((sum, q) => sum + q.average, 0) / 4
-      const quarterDeviations = quarterAverages.map(q => ({
-        quarter: q.quarter,
-        deviation: ((q.average - avgAll) / avgAll) * 100
-      }))
-      
-      quarterDeviations.sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
-      const strongestQuarter = quarterDeviations[0]
-      
-      if (Math.abs(strongestQuarter.deviation) > 5) {
-        findings.push(`${mat.name}: ${strongestQuarter.quarter} apresenta ${strongestQuarter.deviation > 0 ? 'pico' : 'vale'} de ${Math.abs(strongestQuarter.deviation).toFixed(1)}% vs média anual`)
       }
-    })
-    
-    // Recomendações
-    if (seasonalityData.overall.averageOscillation > 10) {
-      recommendations.push('Considerar compras antecipadas nos meses de menor preço para matérias-primas mais voláteis')
-      recommendations.push(`Negociar contratos de longo prazo para ${seasonalityData.overall.mostVolatile.name}`)
+      
+      if (targetInput && (targetInput === 'farinha' || targetInput === 'margarina' || targetInput === 'fermento')) {
+        // Extrai período se mencionado (ex: "jan a ago", "agosto a outubro")
+        const monthMap: Record<string, string> = {
+          // Abreviações (ordem: mais específicas primeiro para evitar falsos positivos)
+          'ago': 'Ago', 'set': 'Set', 'out': 'Out', 'nov': 'Nov', 'dez': 'Dez',
+          'jan': 'Jan', 'fev': 'Fev', 'abr': 'Abr', 'mai': 'Mai', 'jun': 'Jun', 'jul': 'Jul',
+          'mar': 'Mar', // Deixar por último para evitar match com "margarina"
+          // Nomes completos
+          'agosto': 'Ago', 'setembro': 'Set', 'outubro': 'Out', 'novembro': 'Nov', 'dezembro': 'Dez',
+          'janeiro': 'Jan', 'fevereiro': 'Fev', 'abril': 'Abr', 'maio': 'Mai', 'junho': 'Jun',
+          'julho': 'Jul', 'março': 'Mar', 'marco': 'Mar'
+        }
+        
+        // Ordem dos meses para determinar qual é início e qual é fim
+        const monthOrder: Record<string, number> = {
+          'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4,
+          'Mai': 5, 'Jun': 6, 'Jul': 7, 'Ago': 8,
+          'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12
+        }
+        
+        let startMonth: string | null = null
+        let endMonth: string | null = null
+        const foundMonths: Array<{ abbr: string; full: string; position: number }> = []
+        
+        // Função para verificar se é um mês isolado (não parte de outra palavra)
+        const isIsolatedMonth = (text: string, monthAbbr: string, position: number): boolean => {
+          const before = position > 0 ? text[position - 1] : ' '
+          const after = position + monthAbbr.length < text.length ? text[position + monthAbbr.length] : ' '
+          // Verifica se está rodeado por espaços, pontuação ou início/fim da string
+          return /[\s,.\-]/.test(before) && /[\s,.\-]/.test(after)
+        }
+        
+        // Busca todos os meses mencionados na pergunta (apenas meses isolados)
+        for (const [abbr, full] of Object.entries(monthMap)) {
+          let searchPos = 0
+          while (true) {
+            const position = lowerQuestion.indexOf(abbr, searchPos)
+            if (position === -1) break
+            
+            // Verifica se é um mês isolado (não parte de outra palavra como "margarina")
+            if (isIsolatedMonth(lowerQuestion, abbr, position)) {
+              foundMonths.push({ abbr, full, position })
+            }
+            
+            searchPos = position + 1
+          }
+        }
+        
+        // Remove duplicatas (mesmo mês encontrado múltiplas vezes)
+        const uniqueMonths = foundMonths.filter((m, idx, arr) => 
+          arr.findIndex(x => x.full === m.full) === idx
+        )
+        
+        // Ordena por posição na string (da esquerda para direita)
+        uniqueMonths.sort((a, b) => a.position - b.position)
+        
+        if (uniqueMonths.length >= 2) {
+          // Se encontrou 2 ou mais meses, pega o primeiro e o último
+          startMonth = uniqueMonths[0].full
+          endMonth = uniqueMonths[uniqueMonths.length - 1].full
+          
+          // Verifica se a ordem está correta (início antes de fim)
+          if (monthOrder[startMonth] > monthOrder[endMonth]) {
+            // Se está invertido, troca
+            const temp = startMonth
+            startMonth = endMonth
+            endMonth = temp
+          }
+        } else if (uniqueMonths.length === 1) {
+          // Se encontrou apenas um mês, usa como início
+          startMonth = uniqueMonths[0].full
+          // Tenta inferir o fim pela palavra "a" ou "até"
+          const monthIndex = lowerQuestion.indexOf(uniqueMonths[0].abbr)
+          const afterMonth = lowerQuestion.substring(monthIndex + uniqueMonths[0].abbr.length)
+          if (afterMonth.includes(' a ') || afterMonth.includes(' até ') || afterMonth.includes(' ate ')) {
+            // Procura outro mês depois de "a" ou "até"
+            for (const [abbr, full] of Object.entries(monthMap)) {
+              if (afterMonth.includes(abbr) && abbr !== uniqueMonths[0].abbr) {
+                const pos = afterMonth.indexOf(abbr)
+                if (isIsolatedMonth(afterMonth, abbr, pos)) {
+                  endMonth = full
+                  break
+                }
+              }
+            }
+          }
+        }
+        
+        // Filtra série de preços pelo período
+        let filteredSeries = pageContext.seriePrecos
+        if (startMonth && endMonth) {
+          const startIndex = filteredSeries.findIndex(m => m.name === startMonth)
+          const endIndex = filteredSeries.findIndex(m => m.name === endMonth)
+          if (startIndex >= 0 && endIndex >= 0 && startIndex <= endIndex) {
+            filteredSeries = filteredSeries.slice(startIndex, endIndex + 1)
+          }
+        }
+        
+        // Analisa a evolução
+        const inputLabel = targetInput === 'farinha' ? 'Farinha de Trigo' : 
+                          targetInput === 'margarina' ? 'Margarina' : 'Fermento'
+        
+        const prices = filteredSeries
+          .map(m => m[targetInput as 'farinha' | 'margarina' | 'fermento'])
+          .filter((p): p is number => p !== undefined)
+        
+        if (prices.length > 0) {
+          const firstPrice = prices[0]
+          const lastPrice = prices[prices.length - 1]
+          const minPrice = Math.min(...prices)
+          const maxPrice = Math.max(...prices)
+          const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length
+          const variation = ((lastPrice - firstPrice) / firstPrice) * 100
+          
+          // Formata o período para exibição
+          let periodLabel = ''
+          if (startMonth && endMonth) {
+            periodLabel = ` (${startMonth} a ${endMonth})`
+          } else if (startMonth) {
+            periodLabel = ` (a partir de ${startMonth})`
+          }
+          
+          // Monta análise completa do período
+          findings.push(
+            `Evolução do preço de compra de ${inputLabel}${periodLabel}:`
+          )
+          
+          // Análise resumida
+          findings.push(
+            `• Preço inicial (${filteredSeries[0].name}): ${formatValueWithUnit(firstPrice, 'kg', true)}`
+          )
+          findings.push(
+            `• Preço final (${filteredSeries[filteredSeries.length - 1].name}): ${formatValueWithUnit(lastPrice, 'kg', true)}`
+          )
+          findings.push(
+            `• Variação no período: ${variation > 0 ? '+' : ''}${formatNumber(variation, 1)}%`
+          )
+          
+          // Análise detalhada
+          if (filteredSeries.length > 2) {
+            findings.push(
+              `• Preço médio: ${formatValueWithUnit(avgPrice, 'kg', true)}`
+            )
+            findings.push(
+              `• Menor preço: ${formatValueWithUnit(minPrice, 'kg', true)}`
+            )
+            findings.push(
+              `• Maior preço: ${formatValueWithUnit(maxPrice, 'kg', true)}`
+            )
+          }
+          
+          // Adiciona TODAS as evidências mês a mês do período solicitado
+          filteredSeries.forEach(mes => {
+            const price = mes[targetInput as 'farinha' | 'margarina' | 'fermento']
+            if (price !== undefined) {
+              evidence.push({
+                metric: `${inputLabel} - ${mes.name}`,
+                value: formatValueWithUnit(price, 'kg', true),
+                source: 'serie_precos'
+              })
+            }
+          })
+          
+          // Se não encontrou evidências, pode ser que o período não tenha dados
+          if (evidence.length === 0) {
+            findings.push('Não encontrei dados de preços para o período solicitado.')
+            limitations.push('Período sem dados disponíveis')
+          }
+          
+          if (variation > 5) {
+            recommendations.push('O preço apresentou aumento significativo no período. Considere negociar contratos de longo prazo ou buscar alternativas de fornecedores.')
+          } else if (variation < -5) {
+            recommendations.push('O preço apresentou redução no período. Aproveite para negociar melhores condições ou aumentar o volume de compras.')
+          }
+          
+          return {
+            agent: 'compras_fornecedores',
+            confidence: 90,
+            findings,
+            evidence,
+            recommendations,
+            limitations: [],
+            thoughtProcess: {
+              kpiPrincipal: 'evolucao_precos',
+              area: 'compras',
+              dataSource: 'serie_precos',
+              kpiConfidence: 90
+            }
+          }
+        }
+      }
     }
   }
 
-  // Analisa performance de fornecedores (geral ou específico por matéria-prima)
-  // isPerformanceQuestion já foi definido acima
-  if (isPerformanceQuestion || context?.input) {
-    // Se há matéria-prima específica, busca variação por fornecedor
-    if (context?.input) {
-      const supplierData = await DataAdapter.get_supplier_variation(
-        context.input as string,
-        'dezembro'
-      )
+  // PASSO 0.3: Detecção especial de "pior insumo" ANTES do scoring normal
+  if (isWorstInputQuestion(question)) {
+    const pageContext = getPageContext('compras', 'dezembro')
+    
+    if (pageContext?.tabelaPrecos && pageContext.tabelaPrecos.length > 0) {
+      // Filtra "Outros" e pega top 1 por aumento
+      const { valid: precosValidos, hadOthers } = filterOthers(pageContext.tabelaPrecos)
+      const topAumento = precosValidos
+        .filter(mp => mp.variacao > 0)
+        .sort((a, b) => b.variacao - a.variacao)[0]
+      
+      if (topAumento) {
+        const formattedPrice = formatValueWithUnit(topAumento.value, topAumento.unidade, true)
+        findings.push(
+          `O pior insumo do mês, pelo aumento de preço, foi ${topAumento.name} (+${formatNumber(topAumento.variacao, 1)}%). ` +
+          `Preço atual: ${formattedPrice}.`
+        )
+        evidence.push({
+          metric: `${topAumento.name} - Variação`,
+          value: `+${formatNumber(topAumento.variacao, 1)}%`,
+          comparison: `Preço: ${formattedPrice}`,
+          source: 'tabela'
+        })
+        
+        if (hadOthers) {
+          findings.push('Nota: "Outros" é um agrupamento. Para detalhes, abra a tabela de insumos.')
+        }
+        
+        // Confiança alta para "worst_input" detectado
+        const finalConfidence = 85
+        
+        return {
+          agent: 'compras_fornecedores',
+          confidence: finalConfidence,
+          findings,
+          evidence,
+          recommendations,
+          limitations: [],
+          thoughtProcess: {
+            kpiPrincipal: 'custo_mp', // Contexto, não KPI principal
+            area: 'compras',
+            dataSource: 'tabela',
+            kpiConfidence: 90 // Alta confiança na detecção de "worst_input"
+          }
+        }
+      }
+    }
+    
+    // Se não tem dados, informa
+    return {
+      agent: 'compras_fornecedores',
+      confidence: 0,
+      findings: [
+        'Não consegui ler os dados de preços de insumos da página agora.',
+        'Você está com o painel de Compras carregado?'
+      ],
+      evidence: [],
+      recommendations: [],
+      limitations: ['Dados não disponíveis no contexto da página']
+    }
+  }
 
-      const highVariation = supplierData.suppliers.filter(s => Math.abs(s.variation) > 3)
-      if (highVariation.length > 0) {
-        findings.push(`${highVariation.length} fornecedores com variação de preço acima de 3%`)
-        highVariation.forEach(s => {
+  // PASSO 1: PRIMEIRO classifica KPI (usando score determinístico)
+  const scores = scoreKPIs(question)
+  const selection = selectMainKPIFromScores(scores)
+  const kpiConfidenceValue = selection.confidence
+  
+  // PASSO 2: Verifica ambiguidade real (2 KPIs competindo)
+  if (selection.isAmbiguous || !selection.kpiId) {
+    // Pega IDs dos KPIs (filtra nulos/undefined)
+    let altKpiIds = scores.slice(0, 3)
+      .map(s => s.kpiId)
+      .filter((id): id is string => !!id)
+    
+    // Se não há KPIs pontuados, oferece todos os KPIs disponíveis
+    if (altKpiIds.length === 0) {
+      altKpiIds = Object.keys(KPI_CATALOG_IDS) // Todos os KPIs disponíveis
+    }
+    
+    const clarification = generateClarificationMessage(altKpiIds, question)
+    
+    // Formata mensagem incluindo as opções sugeridas
+    const findingsList: string[] = [clarification.message]
+    
+    if (clarification.options.length > 0) {
+      findingsList.push('')
+      findingsList.push('Indicadores sugeridos:')
+      clarification.options.forEach(opt => {
+        findingsList.push(`• ${opt}`)
+      })
+    }
+    
+    return {
+      agent: 'compras_fornecedores',
+      confidence: 0,
+      findings: findingsList,
+      evidence: [],
+      recommendations: [],
+      limitations: ['Pergunta ambígua - precisa esclarecimento'],
+      thoughtProcess: {
+        kpiPrincipal: undefined,
+        area: 'compras',
+        dataSource: 'page_context',
+        kpiConfidence: 0
+      }
+    }
+  }
+  
+  // PASSO 3: DEPOIS busca contexto da página
+  const pageContext = getPageContext('compras', 'dezembro')
+  
+  // PASSO 4: Verifica evidência mínima para o KPI selecionado
+  const evidenceCheck = checkEvidenceForKPI(selection.kpiId, pageContext)
+  
+  if (!evidenceCheck.hasMinimumEvidence) {
+    return {
+      agent: 'compras_fornecedores',
+      confidence: 0,
+      findings: [
+        `Não consegui ler os dados de ${getKPILabel('compras', selection.kpiId)} da página agora.`,
+        'Você está com o painel de Compras carregado? (se sim, diga o período: mês atual / 30 dias)'
+      ],
+      evidence: [],
+      recommendations: [],
+      limitations: ['Dados não disponíveis no contexto da página'],
+      thoughtProcess: {
+        kpiPrincipal: undefined,
+        area: 'compras',
+        dataSource: 'page_context',
+        kpiConfidence: kpiConfidenceValue
+      }
+    }
+  }
+  
+  // PASSO 5: Mapeia KPI ID para backend ID
+  const backendKpiId = KPI_CATALOG_IDS[selection.kpiId]
+  if (!backendKpiId) {
+    return {
+      agent: 'compras_fornecedores',
+      confidence: kpiConfidenceValue,
+      findings: [`KPI ${selection.kpiId} não está mapeado no sistema`],
+      evidence: [],
+      recommendations: [],
+      limitations: ['KPI não encontrado no catálogo'],
+      thoughtProcess: {
+        kpiPrincipal: undefined,
+        area: 'compras',
+        dataSource: 'page_context',
+        kpiConfidence: kpiConfidenceValue
+      }
+    }
+  }
+  
+  // PASSO 6: Busca dados do KPI no contexto (se aplicável)
+  // Alguns KPIs não têm card (ex: dependencia_fornecedores), apenas ranking
+  const kpi = selection.kpiId !== 'dependencia_fornecedores' 
+    ? pageContext?.kpis.find(k => k.id === backendKpiId)
+    : null
+  
+  // Para KPIs com card, valida se encontrou
+  if (selection.kpiId !== 'dependencia_fornecedores' && !kpi) {
+    return {
+      agent: 'compras_fornecedores',
+      confidence: kpiConfidenceValue,
+      findings: [`Não encontrei dados para ${getKPILabel('compras', selection.kpiId)}`],
+      evidence: [],
+      recommendations: [],
+      limitations: ['KPI não encontrado nos dados'],
+      thoughtProcess: {
+        kpiPrincipal: backendKpiId,
+        area: 'compras',
+        dataSource: 'page_context',
+        kpiConfidence: kpiConfidenceValue
+      }
+    }
+  }
+  
+  // PASSO 7: Monta resposta com dados do KPI (com formatação melhor) - apenas se tem card
+  if (kpi) {
+    const meta = getKPIMeta(selection.kpiId) || getKPIMeta(backendKpiId)
+    const kpiValue = typeof kpi.value === 'number' ? kpi.value : parseFloat(String(kpi.value)) || 0
+    const formattedEvidence = formatEvidenceMessage(kpiValue, kpi.unit || '', kpi.change, meta, selection.kpiId)
+    
+    // Monta mensagem de finding melhorada
+    let findingMsg = `${kpi.label}: ${formattedEvidence.value}`
+    if (formattedEvidence.comparison) {
+      findingMsg += ` (${formattedEvidence.comparison})`
+    }
+    findings.push(findingMsg)
+    
+    evidence.push({
+      metric: kpi.label,
+      value: formattedEvidence.value,
+      comparison: formattedEvidence.comparison,
+      source: 'card'
+    })
+  }
+  
+  // PASSO 8: Adiciona dados relacionados do ranking quando aplicável
+  if (pageContext && pageContext.rankingFornecedores && pageContext.rankingFornecedores.length > 0) {
+    if (selection.kpiId === 'otd_fornecedores') {
+      const { valid: fornecedoresValidos, hadOthers } = filterOthers(pageContext.rankingFornecedores)
+      const fornecedoresBaixos = fornecedoresValidos
+        .filter(f => f.otd < 90)
+        .sort((a, b) => a.otd - b.otd)
+        .slice(0, 3) // Top 3 piores
+      
+      if (fornecedoresBaixos.length > 0) {
+        const nomes = fornecedoresBaixos.map(f => f.name).join(', ')
+        findings.push(`Piores atrasos: ${nomes}.`)
+        
+        fornecedoresBaixos.forEach(f => {
           evidence.push({
-            metric: `Variação ${s.name}`,
-            value: `${s.variation > 0 ? '+' : ''}${s.variation}%`,
-            source: 'get_supplier_variation'
+            metric: `${f.name} - OTD`,
+            value: `${formatNumber(f.otd, 1)}%`,
+            comparison: `Qualidade: ${formatNumber(f.qualidade, 1)}%`,
+            source: 'ranking'
           })
         })
+        recommendations.push('Revisar contratos e penalidades por atraso com fornecedores abaixo de 90%')
+        
+        if (hadOthers) {
+          findings.push('Nota: "Outros" é um agrupamento. Para detalhes, abra a tabela de fornecedores.')
+        }
       }
+    }
+    
+    if (selection.kpiId === 'nao_conformidades') {
+      const { valid: fornecedoresValidos, hadOthers } = filterOthers(pageContext.rankingFornecedores)
+      const fornecedoresBaixos = fornecedoresValidos
+        .filter(f => f.qualidade < 95)
+        .sort((a, b) => a.qualidade - b.qualidade)
+        .slice(0, 3) // Top 3 piores
+      
+      if (fornecedoresBaixos.length > 0) {
+        const nomes = fornecedoresBaixos.map(f => f.name).join(', ')
+        findings.push(`${fornecedoresBaixos.length} fornecedores com qualidade abaixo de 95%: ${nomes}.`)
+        
+        fornecedoresBaixos.forEach(f => {
+          evidence.push({
+            metric: `${f.name} - Qualidade`,
+            value: `${formatNumber(f.qualidade, 1)}%`,
+            comparison: `OTD: ${formatNumber(f.otd, 1)}%`,
+            source: 'ranking'
+          })
+        })
+        recommendations.push('Implementar auditorias de qualidade para fornecedores abaixo de 95%')
+        
+        if (hadOthers) {
+          findings.push('Nota: "Outros" é um agrupamento. Para detalhes, abra a tabela de fornecedores.')
+        }
+      }
+    }
 
-      const lowOTD = supplierData.suppliers.filter(s => s.otd < 90)
-      if (lowOTD.length > 0) {
-        findings.push(`${lowOTD.length} fornecedores com OTD abaixo de 90%`)
-        recommendations.push('Revisar contratos e penalidades por atraso')
-      }
-    } else {
-      // Se não há matéria-prima específica, busca performance geral dos fornecedores
-      const kpis = await DataAdapter.get_kpis_overview('dezembro', 'compras')
-      const otdKPI = kpis.kpis.find(k => k.id === 'otd')
+    if (selection.kpiId === 'dependencia_fornecedores') {
+      const { valid: fornecedoresValidos, hadOthers } = filterOthers(pageContext.rankingFornecedores)
+      const fornecedoresOrdenados = fornecedoresValidos
+        .filter(f => typeof f.dependencia === 'number' && f.dependencia > 0)
+        .sort((a, b) => b.dependencia - a.dependencia) // Maior para menor
+        .slice(0, 5) // Top 5 maiores
       
-      // Busca dados de performance de fornecedores através do adapter
-      // Usa uma matéria-prima genérica para obter dados de todos os fornecedores
-      const supplierData = await DataAdapter.get_supplier_variation('Farinha de Trigo', 'dezembro')
-      
-      if (supplierData && supplierData.suppliers && Array.isArray(supplierData.suppliers)) {
-        const performanceFornecedores = supplierData.suppliers
-        // Analisa OTD
-        const lowOTD = performanceFornecedores.filter(s => s.otd < 90)
+      if (fornecedoresOrdenados.length > 0) {
+        const fornecedorPrincipal = fornecedoresOrdenados[0]
+        findings.push(`Fornecedor principal: ${fornecedorPrincipal.name} com ${formatNumber(fornecedorPrincipal.dependencia, 1)}% de dependência.`)
         
-        if (lowOTD.length > 0) {
-          findings.push(`${lowOTD.length} fornecedores com OTD abaixo de 90%`)
-          lowOTD.forEach(s => {
-            evidence.push({
-              metric: `${s.name} - OTD`,
-              value: `${s.otd}%`,
-              comparison: `Qualidade: ${s.quality}%`,
-              source: 'get_supplier_variation'
-            })
-          })
-          recommendations.push('Revisar contratos e penalidades por atraso para fornecedores com OTD baixo')
+        if (fornecedoresOrdenados.length > 1) {
+          const outrosPrincipais = fornecedoresOrdenados.slice(1, 4).map(f => 
+            `${f.name} (${formatNumber(f.dependencia, 1)}%)`
+          ).join(', ')
+          findings.push(`Outros principais: ${outrosPrincipais}.`)
         }
         
-        // Analisa qualidade
-        const lowQuality = performanceFornecedores.filter(s => s.quality < 95)
-        
-        if (lowQuality.length > 0) {
-          findings.push(`${lowQuality.length} fornecedores com qualidade abaixo de 95%`)
-          lowQuality.forEach(s => {
-            evidence.push({
-              metric: `${s.name} - Qualidade`,
-              value: `${s.quality}%`,
-              comparison: `OTD: ${s.otd}%`,
-              source: 'get_supplier_variation'
-            })
+        fornecedoresOrdenados.forEach(f => {
+          evidence.push({
+            metric: `${f.name} - Dependência`,
+            value: `${formatNumber(f.dependencia, 1)}%`,
+            comparison: `OTD: ${formatNumber(f.otd, 1)}% | Qualidade: ${formatNumber(f.qualidade, 1)}%`,
+            source: 'ranking'
           })
-          recommendations.push('Implementar auditorias de qualidade para fornecedores com baixa performance')
+        })
+        
+        const totalDependencia = fornecedoresOrdenados.reduce((sum, f) => sum + f.dependencia, 0)
+        if (totalDependencia > 70) {
+          recommendations.push('Alta concentração de compras. Considere diversificar fornecedores para reduzir riscos.')
         }
         
-        // Melhores fornecedores
-        const topSuppliers = [...performanceFornecedores]
-          .sort((a, b) => (b.otd + b.quality) - (a.otd + a.quality))
-          .slice(0, 3)
-        
-        if (topSuppliers.length > 0) {
-          findings.push(`Melhores fornecedores: ${topSuppliers.map(s => s.name).join(', ')}`)
-          topSuppliers.forEach(s => {
-            evidence.push({
-              metric: `${s.name} - Performance`,
-              value: `OTD: ${s.otd}%, Qualidade: ${s.quality}%`,
-              comparison: 'Fornecedor de alta performance',
-              source: 'get_supplier_variation'
-            })
-          })
+        if (hadOthers) {
+          findings.push('Nota: "Outros" é um agrupamento. Para detalhes, abra a tabela de fornecedores.')
         }
       }
+    }
+  }
+  
+  // PASSO 9: Adiciona dados de custo/preço quando aplicável (NÃO para "worst_input", já tratado acima)
+  if (selection.kpiId === 'custo_total_mp' && pageContext && pageContext.tabelaPrecos && pageContext.tabelaPrecos.length > 0) {
+    const { valid: precosValidos, hadOthers } = filterOthers(pageContext.tabelaPrecos)
+    const topAumentos = precosValidos
+      .filter(mp => mp.variacao > 0)
+      .sort((a, b) => b.variacao - a.variacao)
+      .slice(0, 3) // Top 3 com maior aumento
+    
+    if (topAumentos.length > 0) {
+      const nomes = topAumentos.map(mp => `${mp.name} (+${formatNumber(mp.variacao, 1)}%)`).join(', ')
+      findings.push(`Top insumos com maior aumento: ${nomes}.`)
       
-      if (otdKPI) {
+      topAumentos.forEach(mp => {
+        const formattedPrice = formatValueWithUnit(mp.value, mp.unidade, true)
         evidence.push({
-          metric: 'OTD Médio Fornecedores',
-          value: `${otdKPI.value}%`,
-          comparison: 'Meta: 90%',
-          source: 'get_kpis_overview'
+          metric: mp.name,
+          value: formattedPrice,
+          comparison: `Variação: +${formatNumber(mp.variacao, 1)}%`,
+          source: 'tabela'
         })
+      })
+      
+      if (hadOthers) {
+        findings.push('Nota: "Outros" é um agrupamento. Para detalhes, abra a tabela de insumos.')
       }
     }
   }
-
-  // Se não mapeou para KPIs específicos e não é caso especial, retorna KPIs principais
-  if (mappedKPIs.length === 0 && !isPerformanceQuestion && findings.length === 0) {
-    const mainKPIs = allKPIs.slice(0, 3) // Primeiros 3 KPIs
-    for (const kpi of mainKPIs) {
-      findings.push(`${kpi.label}: ${kpi.value}${kpi.unit || ''}`)
-      evidence.push({
-        metric: kpi.label,
-        value: `${kpi.value}${kpi.unit || ''}`,
-        comparison: kpi.change ? `Variação: ${kpi.change > 0 ? '+' : ''}${kpi.change}%` : undefined,
-        source: 'get_kpis_overview'
-      })
-    }
-  }
-
+  
+  // PASSO 10: Calcula confiança final (kpiConfidence * 0.6 + evidenceQuality * 0.4)
+  const evidenceQuality = evidence.length >= 2 ? 90 : evidence.length === 1 ? 70 : 50
+  const finalConfidence = Math.round(kpiConfidenceValue * 0.6 + evidenceQuality * 0.4)
+  
+  // PASSO 11: Retorna resposta completa
   return {
     agent: 'compras_fornecedores',
-    confidence: findings.length > 0 ? 80 : 60,
+    confidence: finalConfidence,
     findings,
     evidence,
     recommendations,
-    limitations: ['Análise baseada em dados agregados']
+    limitations: [],
+    thoughtProcess: {
+      kpiPrincipal: backendKpiId,
+      area: 'compras',
+      dataSource: 'page_context',
+      kpiConfidence: kpiConfidenceValue
+    }
   }
 }
 

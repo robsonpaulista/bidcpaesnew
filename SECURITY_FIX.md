@@ -119,3 +119,5 @@ O Vercel automaticamente detecta a pasta `api/` e cria Serverless Functions.
 - ✅ `src/services/orchestrator/api.ts` (chama API)
 - ✅ `vercel.json` (configuração de functions)
 
+
+

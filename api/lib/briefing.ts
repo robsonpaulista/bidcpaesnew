@@ -220,3 +220,5 @@ export async function generateBriefing(date: string): Promise<Briefing> {
   }
 }
 
+
+

@@ -144,3 +144,5 @@ import('http').then(({createServer}) => {
 
 **Resumo**: Tudo funciona em desenvolvimento! Os fallbacks garantem que você possa desenvolver sem precisar do Vercel rodando localmente.
 
+
+

@@ -179,6 +179,13 @@ export interface AgentResponse {
   }>
   recommendations: string[]
   limitations?: string[]
+  // Informações de pensamento (para UI)
+  thoughtProcess?: {
+    kpiPrincipal?: string // ID do KPI principal selecionado
+    area?: string // Área/página analisada
+    dataSource?: 'card' | 'tabela' | 'grafico' | 'ranking' | 'page_context'
+    kpiConfidence?: number // Confiança do KPI selection (0-100)
+  }
 }
 
 // ==========================================
@@ -233,6 +240,13 @@ export interface OrchestratorResponse {
       kpi?: string
     }>
     dataLimitations: string[]
+    // Informações de pensamento (para UI)
+    thoughtProcess?: {
+      kpiPrincipal?: string // ID do KPI principal
+      area?: string // Área analisada
+      dataSource?: string
+      kpiConfidence?: number // Confiança do KPI selection (para banner)
+    }
   }
   agentResponses: AgentResponse[]
   confidence: number
@@ -327,6 +341,12 @@ export interface OperationalCase {
 // REQUISIÇÕES
 // ==========================================
 
+export interface ConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp?: string
+}
+
 export interface AskRequest {
   question: string
   context?: {
@@ -334,6 +354,7 @@ export interface AskRequest {
     period?: string
     kpi?: string
   }
+  conversationHistory?: ConversationMessage[]
 }
 
 export interface ValidateCaseRequest {
