@@ -1337,29 +1337,55 @@ export async function agentProducao(
     const pageContext = getPageContext('producao', 'dezembro')
     
     if (pageContext?.rendimentoLinhas && pageContext.rendimentoLinhas.length > 0) {
-      // Filtra e pega linha com menor rendimento (pior performance)
-      const worstLine = pageContext.rendimentoLinhas
-        .sort((a, b) => a.rendimento - b.rendimento)[0]
+      // Ordena por rendimento (menor primeiro = pior)
+      const linhasOrdenadas = [...pageContext.rendimentoLinhas]
+        .sort((a, b) => a.rendimento - b.rendimento)
+      
+      const worstLine = linhasOrdenadas[0]
       
       if (worstLine) {
         findings.push(
-          `A linha com pior rendimento é ${worstLine.name} (${formatNumber(worstLine.rendimento, 1)}%). ` +
+          `A linha com menor rendimento é ${worstLine.name} (${formatNumber(worstLine.rendimento, 1)}%). ` +
           `Meta: ${formatNumber(worstLine.meta, 1)}%.`
         )
+        
+        // Adiciona evidência da pior linha
         evidence.push({
           metric: `${worstLine.name} - Rendimento`,
           value: `${formatNumber(worstLine.rendimento, 1)}%`,
           comparison: `Meta: ${formatNumber(worstLine.meta, 1)}%`,
-          source: 'rendimento_linhas'
+          source: 'page_context'
+        })
+        
+        // Adiciona todas as linhas para comparação (mostra ranking completo)
+        linhasOrdenadas.forEach((linha, index) => {
+          if (index > 0) { // Já adicionou a pior acima
+            evidence.push({
+              metric: `${linha.name} - Rendimento`,
+              value: `${formatNumber(linha.rendimento, 1)}%`,
+              comparison: `Meta: ${formatNumber(linha.meta, 1)}%`,
+              source: 'page_context'
+            })
+          }
         })
         
         if (worstLine.rendimento < worstLine.meta) {
           recommendations.push(`Implementar ações de melhoria na ${worstLine.name} para atingir a meta de ${formatNumber(worstLine.meta, 1)}%.`)
         }
         
+        // Adiciona comparação com outras linhas
+        if (linhasOrdenadas.length > 1) {
+          const bestLine = linhasOrdenadas[linhasOrdenadas.length - 1]
+          const diferenca = bestLine.rendimento - worstLine.rendimento
+          findings.push(
+            `Comparado com a melhor linha (${bestLine.name}: ${formatNumber(bestLine.rendimento, 1)}%), ` +
+            `há uma diferença de ${formatNumber(diferenca, 1)} pontos percentuais.`
+          )
+        }
+        
         return {
           agent: 'producao',
-          confidence: 85,
+          confidence: 90,
           findings,
           evidence,
           recommendations,
@@ -1368,10 +1394,23 @@ export async function agentProducao(
             kpiPrincipal: 'rendimento',
             area: 'producao',
             dataSource: 'page_context',
-            kpiConfidence: 85
+            kpiConfidence: 90
           }
         }
       }
+    }
+    
+    // Se não encontrou dados, informa
+    return {
+      agent: 'producao',
+      confidence: 0,
+      findings: [
+        'Não consegui ler os dados de rendimento por linha da página agora.',
+        'Você está com o painel de Produção carregado?'
+      ],
+      evidence: [],
+      recommendations: [],
+      limitations: ['Dados não disponíveis no contexto da página']
     }
   }
 

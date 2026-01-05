@@ -352,11 +352,28 @@ export function isSpecificLineOEEQuestion(question: string): { isOEEQuestion: bo
  */
 export function isWorstLineQuestion(question: string): boolean {
   const lowerQuestion = question.toLowerCase()
-  const worstKeywords = ['pior', 'qual a pior', 'menor', 'pior linha', 'linha com pior', 'vilão', 'vilao']
-  const lineKeywords = ['linha', 'linhas', 'produção', 'producao']
   
+  // Verifica se menciona "linha" (obrigatório)
+  const hasLine = lowerQuestion.includes('linha') || lowerQuestion.includes('linhas')
+  if (!hasLine) return false
+  
+  // Palavras-chave que indicam "pior/menor"
+  const worstKeywords = [
+    'pior', 'menor', 'menos', 'vilão', 'vilao',
+    'rendeu menos', 'rendeu pior', 'rendimento menor', 'menor rendimento',
+    'qual linha rendeu', 'qual linha tem', 'qual linha teve',
+    'linha que rendeu', 'linha com menor', 'linha com pior'
+  ]
+  
+  // Verifica se tem alguma palavra-chave de "pior/menor"
   const hasWorst = worstKeywords.some(kw => lowerQuestion.includes(kw))
-  const hasLine = lineKeywords.some(kw => lowerQuestion.includes(kw))
+  
+  // Casos especiais: "qual linha rendeu menos?" ou "qual linha tem menor rendimento?"
+  if (lowerQuestion.includes('qual') && lowerQuestion.includes('linha') && 
+      (lowerQuestion.includes('rendeu') || lowerQuestion.includes('tem') || lowerQuestion.includes('teve')) &&
+      (lowerQuestion.includes('menos') || lowerQuestion.includes('menor') || lowerQuestion.includes('pior'))) {
+    return true
+  }
   
   return hasWorst && hasLine
 }
