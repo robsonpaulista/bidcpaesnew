@@ -279,6 +279,18 @@ function consolidateResponses(
     c.toLowerCase().includes('preco inicial')
   )
   
+  // Detecta se é evolução de OEE/componentes (série temporal)
+  const isOEEEvolutionFindings = relevantCauses.some(c => 
+    c.toLowerCase().includes('evolução do oee') || 
+    c.toLowerCase().includes('evolucao do oee') ||
+    c.toLowerCase().includes('evolução dos componentes') ||
+    c.toLowerCase().includes('evolucao dos componentes') ||
+    c.toLowerCase().includes('oee inicial') ||
+    c.toLowerCase().includes('disponibilidade inicial') ||
+    c.toLowerCase().includes('performance inicial') ||
+    c.toLowerCase().includes('qualidade inicial')
+  )
+  
   // Se há mensagem de clarificação (encontra em findings), preserva ela completa
   const clarificationFinding = relevantCauses.find(c => 
     c.toLowerCase().includes('qual desses indicadores') || 
@@ -286,20 +298,25 @@ function consolidateResponses(
     c.toLowerCase().includes('indicadores sugeridos')
   )
   
-  // Se for evolução de preços, organiza melhor a distribuição:
+  // Se for evolução de preços ou OEE, organiza melhor a distribuição:
   // - "Principais Causas": análise resumida (título + estatísticas: inicial, final, variação, média, etc.)
   // - "Evidências": todos os meses do período (série temporal completa)
   let topCauses: OrchestratorResponse['synthesis']['topCauses'] = []
   
-  if (isPriceEvolutionFindings) {
+  if (isPriceEvolutionFindings || isOEEEvolutionFindings) {
     // Para evolução de preços, separa:
     // - Título/Resumo: vai para "Principais Causas"
     // - Estatísticas detalhadas: também vão para "Principais Causas"
     // - Meses individuais: vão para "Evidências" (já estão lá)
-    const titleFinding = relevantCauses.find(c => 
-      c.toLowerCase().includes('evolução do preço') || 
-      c.toLowerCase().includes('evolucao do preco')
-    )
+    const titleFinding = relevantCauses.find(c => {
+      const lower = c.toLowerCase()
+      return lower.includes('evolução do preço') || 
+             lower.includes('evolucao do preco') ||
+             lower.includes('evolução do oee') ||
+             lower.includes('evolucao do oee') ||
+             lower.includes('evolução dos componentes') ||
+             lower.includes('evolucao dos componentes')
+    })
     
     const analysisFindings = relevantCauses.filter(c => {
       const lower = c.toLowerCase()
@@ -315,9 +332,26 @@ function consolidateResponses(
              lower.includes('menor preço') ||
              lower.includes('menor preco') ||
              lower.includes('maior preço') ||
-             lower.includes('maior preco')) &&
+             lower.includes('maior preco') ||
+             // Estatísticas de OEE/componentes
+             lower.includes('oee inicial') ||
+             lower.includes('oee final') ||
+             lower.includes('disponibilidade inicial') ||
+             lower.includes('disponibilidade final') ||
+             lower.includes('performance inicial') ||
+             lower.includes('performance final') ||
+             lower.includes('qualidade inicial') ||
+             lower.includes('qualidade final') ||
+             lower.includes('médio') ||
+             lower.includes('medio') ||
+             lower.includes('menor ') ||
+             lower.includes('maior ')) &&
              !lower.includes('evolução do preço') &&
-             !lower.includes('evolucao do preco')
+             !lower.includes('evolucao do preco') &&
+             !lower.includes('evolução do oee') &&
+             !lower.includes('evolucao do oee') &&
+             !lower.includes('evolução dos componentes') &&
+             !lower.includes('evolucao dos componentes')
     })
     
     // Agrupa título + estatísticas em uma única causa principal
@@ -362,12 +396,19 @@ function consolidateResponses(
     (e.metric && /(farinha|margarina|fermento).*-(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/i.test(e.metric))
   )
   
+  // Detecta se é evolução de OEE/componentes nas evidências
+  const isOEEEvolutionEvidence = allEvidence.some(e => 
+    e.source === 'serie_oee' || 
+    (e.metric && /(oee|disponibilidade|performance|qualidade).*-(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/i.test(e.metric))
+  )
+  
   // Combina ambas as detecções (findings ou evidências)
   const isPriceEvolution = isPriceEvolutionFindings || isPriceEvolutionEvidence
+  const isOEEEvolution = isOEEEvolutionFindings || isOEEEvolutionEvidence
   
-  // Se for evolução de preços, mostra TODAS as evidências do período (sem limite)
+  // Se for evolução temporal (preços ou OEE), mostra TODAS as evidências do período (sem limite)
   // Caso contrário, limita a 5 para evitar sobrecarga
-  const evidenceLimit = isPriceEvolution ? allEvidence.length : 5
+  const evidenceLimit = (isPriceEvolution || isOEEEvolution) ? allEvidence.length : 5
   
   // Prioriza evidências relevantes, depois adiciona outras se necessário
   const prioritizedEvidence = [
