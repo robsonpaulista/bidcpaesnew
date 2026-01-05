@@ -33,10 +33,11 @@ const KPI_KEYWORDS: Record<string, Array<{ keywords: string[], weight: number }>
     { keywords: ['faltou', 'falta', 'corte'], weight: KEYWORD_WEIGHTS.secondary }
   ],
   lead_time_medio: [
-    { keywords: ['lead time', 'leadtime'], weight: KEYWORD_WEIGHTS.exact },
-    { keywords: ['tempo de entrega', 'tempo entre pedido e entrega', 'tempo médio de entrega'], weight: KEYWORD_WEIGHTS.primary },
-    { keywords: ['quantos dias', 'quanto tempo', 'demora', 'demorou'], weight: KEYWORD_WEIGHTS.secondary },
-    { keywords: ['prazo médio', 'prazo de entrega'], weight: KEYWORD_WEIGHTS.secondary }
+    { keywords: ['lead time', 'leadtime', 'lead time médio', 'leadtime medio', 'lead time medio', 'leadtime médio'], weight: KEYWORD_WEIGHTS.exact },
+    { keywords: ['tempo de entrega', 'tempo entre pedido e entrega', 'tempo médio de entrega', 'tempo medio de entrega'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['quantos dias', 'quanto tempo', 'demora', 'demorou', 'tempo em dias', 'dias para entrega'], weight: KEYWORD_WEIGHTS.primary },
+    { keywords: ['prazo médio', 'prazo medio', 'prazo de entrega', 'prazo entrega'], weight: KEYWORD_WEIGHTS.secondary },
+    { keywords: ['geral', 'médio geral', 'medio geral'], weight: KEYWORD_WEIGHTS.context }
   ],
   nao_conformidades: [
     { keywords: ['qualidade', 'não conformidade', 'nao conformidade', 'não conformidades', 'nao conformidades'], weight: KEYWORD_WEIGHTS.exact },

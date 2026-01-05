@@ -87,6 +87,26 @@ export function recoverContextFromHistory(
   history: ConversationMessage[]
 ): { recoveredQuestion: string; contextType: 'follow-up' | 'clarification' | 'none' } {
   
+  // Se a pergunta menciona explicitamente um KPI/indicador diferente, NÃO recupera contexto
+  // Ex: se pergunta anterior era sobre "fornecedor que demora mais" e agora é "lead time médio"
+  // → não deve recuperar contexto, é uma nova pergunta
+  const lowerQuestion = currentQuestion.toLowerCase()
+  const explicitKpiKeywords = [
+    'lead time', 'leadtime', 'tempo de entrega', 'tempo médio de entrega',
+    'otd', 'on time delivery', 'fill rate', 'cobertura', 'custo total',
+    'não conformidades', 'nao conformidades', 'qualidade',
+    'oee', 'disponibilidade', 'performance', 'rendimento', 'produtividade'
+  ]
+  const hasExplicitKpi = explicitKpiKeywords.some(kw => lowerQuestion.includes(kw))
+  
+  // Se menciona KPI explícito, não recupera contexto (é nova pergunta)
+  if (hasExplicitKpi && !isFollowUpQuestion(currentQuestion)) {
+    return {
+      recoveredQuestion: currentQuestion,
+      contextType: 'none'
+    }
+  }
+  
   // Detecta follow-up
   if (isFollowUpQuestion(currentQuestion)) {
     // Busca a última pergunta do usuário que não é um follow-up
