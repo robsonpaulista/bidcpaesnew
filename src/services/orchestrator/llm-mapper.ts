@@ -313,6 +313,51 @@ function parseLLMResponse(content: string): LLMMappingResult {
 
 function mapWithKeywords(question: string, context?: Record<string, unknown>): LLMMappingResult {
   const lowerQuestion = question.toLowerCase()
+  const normalizedQuestion = lowerQuestion.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  
+  // PRIORIDADE 1: Detecção especial de evolução de preços de insumos
+  // Se menciona evolução/variação + preço + insumo + período, força analyze_supplier_performance
+  const evolutionKeywords = [
+    'evolução', 'evolucao', 'variação', 'variacao', 'variação mensal', 'variacao mensal',
+    'tendência', 'tendencia', 'histórico', 'historico', 'série', 'serie'
+  ]
+  const priceKeywords = ['preço', 'preco', 'preços', 'precos']
+  const inputKeywords = ['farinha', 'margarina', 'fermento', 'açúcar', 'acucar', 'leite', 'ovos', 'sal', 'matéria-prima', 'materia-prima']
+  const monthKeywords = [
+    'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez',
+    'janeiro', 'fevereiro', 'março', 'marco', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+  ]
+  
+  const hasEvolution = evolutionKeywords.some(kw => {
+    const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return normalizedQuestion.includes(normalizedKw)
+  })
+  const hasPrice = priceKeywords.some(kw => lowerQuestion.includes(kw) || normalizedQuestion.includes(kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+  const hasInput = inputKeywords.some(kw => {
+    const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return normalizedQuestion.includes(normalizedKw)
+  })
+  const hasMonth = monthKeywords.some(kw => {
+    const regex = new RegExp(`\\b${kw}\\b`, 'i')
+    return regex.test(lowerQuestion)
+  })
+  const hasPeriod = (lowerQuestion.includes(' a ') || lowerQuestion.includes(' até ') || lowerQuestion.includes(' ate ')) && hasMonth
+  
+  // Se detecta padrão de evolução de preços de insumo, força analyze_supplier_performance
+  if ((hasEvolution || hasPeriod) && hasPrice && hasInput) {
+    const entities: LLMMappingResult['entities'] = {}
+    if (lowerQuestion.includes('farinha')) entities.produto = 'farinha'
+    if (lowerQuestion.includes('margarina')) entities.produto = 'margarina'
+    if (lowerQuestion.includes('fermento')) entities.produto = 'fermento'
+    
+    return {
+      intent: 'analyze_supplier_performance',
+      confidence: 0.95,
+      entities
+    }
+  }
+  
   const intentionScores: Array<{ intention: BusinessIntention; score: number }> = []
 
   for (const [intentionId, definition] of Object.entries(intentions)) {
@@ -440,6 +485,56 @@ export async function mapQuestionToIntentionWithLLM(
           console.log('⚠️ Provider não suportado, usando fallback')
         }
         return mapWithKeywords(question, context)
+    }
+
+    // CORREÇÃO CRÍTICA: Verifica se o LLM mapeou errado para evolução de preços de insumos
+    // Se detecta padrão de evolução de preços de insumo mas LLM mapeou para outra intenção, corrige
+    const lowerQuestion = question.toLowerCase()
+    const normalizedQuestion = lowerQuestion.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    
+    const evolutionKeywords = [
+      'evolução', 'evolucao', 'variação', 'variacao', 'variação mensal', 'variacao mensal',
+      'tendência', 'tendencia', 'histórico', 'historico', 'série', 'serie'
+    ]
+    const priceKeywords = ['preço', 'preco', 'preços', 'precos']
+    const inputKeywords = ['farinha', 'margarina', 'fermento', 'açúcar', 'acucar', 'leite', 'ovos', 'sal', 'matéria-prima', 'materia-prima']
+    const monthKeywords = [
+      'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez',
+      'janeiro', 'fevereiro', 'março', 'marco', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ]
+    
+    const hasEvolution = evolutionKeywords.some(kw => {
+      const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      return normalizedQuestion.includes(normalizedKw)
+    })
+    const hasPrice = priceKeywords.some(kw => lowerQuestion.includes(kw) || normalizedQuestion.includes(kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+    const hasInput = inputKeywords.some(kw => {
+      const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      return normalizedQuestion.includes(normalizedKw)
+    })
+    const hasMonth = monthKeywords.some(kw => {
+      const regex = new RegExp(`\\b${kw}\\b`, 'i')
+      return regex.test(lowerQuestion)
+    })
+    const hasPeriod = (lowerQuestion.includes(' a ') || lowerQuestion.includes(' até ') || lowerQuestion.includes(' ate ')) && hasMonth
+    
+    // Se detecta padrão de evolução de preços de insumo mas LLM mapeou para outra intenção, corrige
+    if ((hasEvolution || hasPeriod) && hasPrice && hasInput && result.intent !== 'analyze_supplier_performance') {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ LLM mapeou errado, corrigindo para analyze_supplier_performance:', {
+          originalIntent: result.intent,
+          question: question.substring(0, 50)
+        })
+      }
+      result.intent = 'analyze_supplier_performance'
+      result.confidence = 0.95
+      // Adiciona entidades de insumo se não existirem
+      if (!result.entities.produto) {
+        if (lowerQuestion.includes('farinha')) result.entities.produto = 'farinha'
+        if (lowerQuestion.includes('margarina')) result.entities.produto = 'margarina'
+        if (lowerQuestion.includes('fermento')) result.entities.produto = 'fermento'
+      }
     }
 
     // Merge entidades do contexto (prioridade)
