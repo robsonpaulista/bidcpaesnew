@@ -58,41 +58,44 @@
 
 ---
 
-## ❌ KPIs/Indicadores FALTANDO no Mapeamento
+## ✅ KPIs/Indicadores IMPLEMENTADOS
 
-### 1. **Produtividade por Turno** (`produtividade_turno`)
-- **Dados disponíveis**: `produtividadeTurno` no `pageContext`
-- **O que falta**:
-  - Adicionar `produtividade_turno` em `KPI_KEYWORDS` no `kpi-scorer.ts`
-  - Adicionar label em `kpi-labels.ts`
-  - Implementar detecção especial (se necessário)
-  - Adicionar lógica no `agentProducao` para responder sobre turnos
-
-**Palavras-chave sugeridas**:
-- `['produtividade', 'produtividade por turno', 'turno', 'turnos', 'volume por turno', 'kg por turno']`
-
----
-
-### 2. **MTTR** (`mttr`)
-- **Dados disponíveis**: Exibido na página (2.5h), mas não está no `pageContext`
-- **O que falta**:
-  - Adicionar `mttr` em `KPI_KEYWORDS` no `kpi-scorer.ts`
-  - Adicionar label em `kpi-labels.ts`
-  - Adicionar `mttr` ao `pageContext` (se necessário)
-
-**Palavras-chave sugeridas**:
-- `['mttr', 'tempo médio de reparo', 'tempo medio de reparo', 'tempo de reparo', 'manutenção', 'manutencao']`
+### 1. **Produtividade por Turno** (`produtividade_turno`) ✅
+- **Status**: ✅ **IMPLEMENTADO**
+- **Mapeado em**:
+  - ✅ `KPI_KEYWORDS` no `kpi-scorer.ts` com palavras-chave completas
+  - ✅ Label em `kpi-labels.ts`
+  - ✅ Lógica especial no `agentProducao` para análise detalhada
+  - ✅ Meta em `kpi-metas.ts`
+- **Palavras-chave**: `['produtividade por turno', 'turno', 'turnos', 'volume por turno', 'kg por turno', 'turno 1', 'turno 2', 'turno 3']`
+- **Funcionalidades**:
+  - Análise completa de todos os turnos
+  - Comparação de eficiência entre turnos
+  - Identificação de melhor e pior turno
+  - Recomendações específicas por turno
 
 ---
 
-### 3. **Indicadores de Qualidade** (Temperatura, pH, Umidade)
-- **Dados disponíveis**: Exibidos na página, mas não estão no `pageContext`
-- **O que falta**:
-  - Decidir se são KPIs separados ou parte de "Qualidade"
-  - Se separados: adicionar em `KPI_KEYWORDS` e `kpi-labels.ts`
-  - Adicionar ao `pageContext` (se necessário)
+### 2. **MTTR** (`mttr`) ✅
+- **Status**: ✅ **IMPLEMENTADO**
+- **Mapeado em**:
+  - ✅ `KPI_KEYWORDS` no `kpi-scorer.ts` com palavras-chave completas
+  - ✅ Label em `kpi-labels.ts`
+  - ✅ Lógica especial no `agentProducao` com análise de relação MTBF/MTTR
+  - ✅ Meta em `kpi-metas.ts` (3h)
+- **Palavras-chave**: `['mttr', 'tempo médio de reparo', 'tempo de reparo', 'reparo', 'manutenção']`
+- **Funcionalidades**:
+  - Análise de tempo médio de reparo
+  - Comparação com MTBF (relação MTBF/MTTR)
+  - Recomendações baseadas em threshold (3h)
 
-**Observação**: Estes podem ser tratados como parte do KPI "Qualidade" existente, ou como KPIs separados.
+---
+
+### 3. **Indicadores de Qualidade** (Temperatura, pH, Umidade) ⚠️
+- **Status**: ⚠️ **DECIDIDO: Tratados como parte de "Qualidade"**
+- **Decisão**: Estes indicadores são tratados como parte do KPI "Qualidade" existente
+- **Razão**: São métricas de controle de qualidade, não KPIs principais de produção
+- **Observação**: Se necessário no futuro, podem ser adicionados como KPIs separados
 
 ---
 
@@ -101,44 +104,38 @@
 | Categoria | Total | Mapeados | Faltando | % Completo |
 |-----------|-------|----------|----------|------------|
 | **KPIs Principais** | 8 | 8 | 0 | ✅ 100% |
-| **Indicadores Adicionais** | 4 | 0 | 4 | ❌ 0% |
-| **Gráficos/Visualizações** | 4 | 2 | 2 | ⚠️ 50% |
+| **Indicadores Adicionais** | 4 | 2 | 2* | ✅ 50% |
+| **Gráficos/Visualizações** | 4 | 3 | 1 | ✅ 75% |
 | **Detecções Especiais** | 4 | 3 | 1 | ⚠️ 75% |
-| **TOTAL** | **20** | **13** | **7** | ⚠️ **65%** |
+| **TOTAL** | **20** | **16** | **4*** | ✅ **80%** |
+
+*_Indicadores de qualidade (Temperatura, pH, Umidade) são tratados como parte de "Qualidade"_
 
 ---
 
-## 🎯 Recomendações Prioritárias
+## ✅ Conclusão Final
 
-### Prioridade ALTA 🔴
-1. **Adicionar `produtividade_turno`** ao mapeamento
-   - É um gráfico principal na página
-   - Dados já disponíveis no `pageContext`
-   - Usuários podem perguntar sobre turnos
-
-### Prioridade MÉDIA 🟡
-2. **Adicionar `mttr`** ao mapeamento
-   - Indicador importante de manutenção
-   - Complementa `mtbf`
-
-### Prioridade BAIXA 🟢
-3. **Decidir sobre indicadores de qualidade** (Temperatura, pH, Umidade)
-   - Podem ser tratados como parte de "Qualidade" ou KPIs separados
-   - Dados precisam ser adicionados ao `pageContext`
-
----
-
-## ✅ Conclusão
-
-O agente está **65% completo** em relação aos indicadores da página de Produção. 
+O agente está **80% completo** em relação aos indicadores da página de Produção. 
 
 **Pontos fortes**:
-- ✅ Todos os 8 KPIs principais estão mapeados
+- ✅ Todos os 8 KPIs principais estão mapeados (100%)
+- ✅ `produtividade_turno` implementado com análise completa
+- ✅ `mttr` implementado com análise de relação MTBF/MTTR
 - ✅ Detecções especiais para OEE e Rendimento funcionando
 - ✅ Evolução de indicadores implementada
+- ✅ Análise detalhada de perdas por tipo
 
-**Pontos de melhoria**:
-- ❌ Falta mapear "Produtividade por Turno" (prioritário)
-- ❌ Falta mapear "MTTR"
-- ⚠️ Indicadores de qualidade (Temperatura, pH, Umidade) não estão no `pageContext`
+**Status atual**:
+- ✅ **16/20 indicadores mapeados** (80%)
+- ✅ **3/4 gráficos totalmente mapeados** (75%)
+- ✅ **3/4 detecções especiais implementadas** (75%)
+
+**Decisões tomadas**:
+- ✅ Indicadores de qualidade (Temperatura, pH, Umidade) são tratados como parte do KPI "Qualidade" existente
+- ✅ `produtividade_turno` tem análise completa com comparação entre turnos
+- ✅ `mttr` tem análise com relação MTBF/MTTR e recomendações
+
+**Próximos passos (opcional)**:
+- 🔄 Se necessário, adicionar indicadores de qualidade como KPIs separados no futuro
+- 🔄 Considerar adicionar detecção especial para perguntas sobre turnos específicos
 
