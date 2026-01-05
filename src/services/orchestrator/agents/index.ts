@@ -240,6 +240,7 @@ export async function agentComprasFornecedores(
   const findings: string[] = []
   const evidence: AgentResponse['evidence'] = []
   const recommendations: string[] = []
+  const limitations: string[] = []
   const kpiConfidence = 0 // Será calculado
 
   // PASSO 0.1: Detecção especial de preço específico de insumo (ex: "preço de compra do Leite")
@@ -602,7 +603,7 @@ export async function agentComprasFornecedores(
             thoughtProcess: {
               kpiPrincipal: 'evolucao_precos',
               area: 'compras',
-              dataSource: 'serie_precos',
+              dataSource: 'page_context',
               kpiConfidence: 90
             }
           }
