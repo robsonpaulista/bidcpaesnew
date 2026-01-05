@@ -1122,15 +1122,20 @@ export async function agentProducao(
   const indicatorKeywords = ['oee', 'disponibilidade', 'performance', 'qualidade', 'rendimento', 'perdas']
   const hasIndicatorKeyword = indicatorKeywords.some(kw => lowerQuestion.includes(kw))
   
+  // Detecta menção a "componentes" (refere-se aos componentes do OEE: disponibilidade, performance, qualidade)
+  const hasComponentesKeyword = lowerQuestion.includes('componente') || lowerQuestion.includes('componentes')
+  
   // Detecta linha mencionada (opcional)
   const lineKeywords = ['linha 1', 'linha 2', 'linha 3', 'linha 4', 'francês', 'frances', 'forma', 'doces', 'especiais']
   const hasLineKeyword = lineKeywords.some(kw => lowerQuestion.includes(kw))
   
   // Detecta evolução se:
-  // 1. Tem palavra-chave explícita de evolução + indicador + (opcionalmente) linha, OU
-  // 2. Tem período (meses) + indicador + (opcionalmente) linha
-  const isEvolutionQuestion = (hasEvolutionKeyword && hasIndicatorKeyword) ||
-                              (hasMonthKeyword && hasPeriodConnector && hasIndicatorKeyword)
+  // 1. Tem palavra-chave explícita de evolução + (indicador OU componentes) + (opcionalmente) linha, OU
+  // 2. Tem período (meses) + (indicador OU componentes) + (opcionalmente) linha, OU
+  // 3. Tem "histórico" + "componentes" + período (mesmo sem palavra "evolução")
+  const isEvolutionQuestion = (hasEvolutionKeyword && (hasIndicatorKeyword || hasComponentesKeyword)) ||
+                              (hasMonthKeyword && hasPeriodConnector && (hasIndicatorKeyword || hasComponentesKeyword)) ||
+                              (hasEvolutionKeyword && hasComponentesKeyword && hasMonthKeyword)
   
   if (isEvolutionQuestion) {
     const pageContext = getPageContext('producao', 'dezembro')
@@ -1138,7 +1143,13 @@ export async function agentProducao(
     if (pageContext?.serieOEE && pageContext.serieOEE.length > 0) {
       // Determina qual indicador analisar
       let targetIndicator: 'oee' | 'disponibilidade' | 'performance' | 'qualidade' | null = null
-      if (lowerQuestion.includes('oee')) {
+      let analyzeAllComponents = false
+      
+      if (hasComponentesKeyword && !hasIndicatorKeyword) {
+        // Se menciona "componentes" mas não um indicador específico, analisa todos
+        analyzeAllComponents = true
+        targetIndicator = 'oee' // Usa OEE como base, mas mostra todos
+      } else if (lowerQuestion.includes('oee')) {
         targetIndicator = 'oee'
       } else if (lowerQuestion.includes('disponibilidade')) {
         targetIndicator = 'disponibilidade'
@@ -1242,6 +1253,75 @@ export async function agentProducao(
       }
       
       // Analisa a evolução
+      let periodLabel = ''
+      if (startMonth && endMonth) {
+        periodLabel = ` (${startMonth} a ${endMonth})`
+      } else if (startMonth) {
+        periodLabel = ` (a partir de ${startMonth})`
+      }
+      
+      // Se menciona "componentes", analisa todos (OEE, Disponibilidade, Performance, Qualidade)
+      if (analyzeAllComponents) {
+        findings.push(`Evolução dos Componentes do OEE${periodLabel}:`)
+        
+        const components = [
+          { key: 'oee' as const, label: 'OEE' },
+          { key: 'disponibilidade' as const, label: 'Disponibilidade' },
+          { key: 'performance' as const, label: 'Performance' },
+          { key: 'qualidade' as const, label: 'Qualidade' }
+        ]
+        
+        components.forEach(comp => {
+          const values = filteredSeries
+            .map(m => m[comp.key])
+            .filter((v): v is number => v !== undefined)
+          
+          if (values.length > 0) {
+            const firstValue = values[0]
+            const lastValue = values[values.length - 1]
+            const avgValue = values.reduce((sum, v) => sum + v, 0) / values.length
+            const variation = ((lastValue - firstValue) / firstValue) * 100
+            
+            findings.push(
+              `• ${comp.label}: ${formatNumber(firstValue, 1)}% → ${formatNumber(lastValue, 1)}% (variação: ${variation > 0 ? '+' : ''}${formatNumber(variation, 1)}%, média: ${formatNumber(avgValue, 1)}%)`
+            )
+            
+            // Adiciona evidências mês a mês para cada componente
+            filteredSeries.forEach(mes => {
+              const value = mes[comp.key]
+              if (value !== undefined) {
+                evidence.push({
+                  metric: `${comp.label} - ${mes.name}`,
+                  value: `${formatNumber(value, 1)}%`,
+                  source: 'serie_oee'
+                })
+              }
+            })
+          }
+        })
+        
+        if (evidence.length === 0) {
+          findings.push('Não encontrei dados para o período solicitado.')
+          limitations.push('Período sem dados disponíveis')
+        }
+        
+        return {
+          agent: 'producao',
+          confidence: 90,
+          findings,
+          evidence,
+          recommendations,
+          limitations: [],
+          thoughtProcess: {
+            kpiPrincipal: 'oee',
+            area: 'producao',
+            dataSource: 'page_context',
+            kpiConfidence: 90
+          }
+        }
+      }
+      
+      // Análise de indicador específico
       const indicatorLabel = targetIndicator === 'oee' ? 'OEE' :
                             targetIndicator === 'disponibilidade' ? 'Disponibilidade' :
                             targetIndicator === 'performance' ? 'Performance' : 'Qualidade'
@@ -1257,13 +1337,6 @@ export async function agentProducao(
         const maxValue = Math.max(...values)
         const avgValue = values.reduce((sum, v) => sum + v, 0) / values.length
         const variation = ((lastValue - firstValue) / firstValue) * 100
-        
-        let periodLabel = ''
-        if (startMonth && endMonth) {
-          periodLabel = ` (${startMonth} a ${endMonth})`
-        } else if (startMonth) {
-          periodLabel = ` (a partir de ${startMonth})`
-        }
         
         findings.push(
           `Evolução do ${indicatorLabel}${periodLabel}:`
